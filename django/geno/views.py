@@ -220,7 +220,9 @@ def documents(request, doctype, obj_id, action):
     try:
         doctype_obj = DocumentType.objects.get(name=doctype)
         if action == "create":
-            if not request.user.has_perm("geno.add_document"):
+            # Legacy document generation accepts an object ID supplied by the
+            # caller. Do not expose it to tenants without object-level checks.
+            if not request.user.is_staff or not request.user.has_perm("geno.add_document"):
                 return unauthorized(request)
             template_pk = request.GET.get("template")
             if not template_pk:
