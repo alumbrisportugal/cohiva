@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -710,3 +710,64 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
         detail = self.call(self.resident, self.own.id)
         self.assertEqual(set(detail.data), {"id", "name", "doctype", "ts_created"})
         self.assertNotIn("data", detail.data)
+
+
+class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
+    """Metadata for previous tenancy does not cross into the successor's contract."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.former = get_user_model().objects.create_user(username="alumbris_former_docs")
+        cls.successor = get_user_model().objects.create_user(username="alumbris_successor_docs")
+        cls.addresses[0].user = cls.former
+        cls.addresses[0].save(update_fields=["user"])
+        cls.addresses[2].user = cls.successor
+        cls.addresses[2].save(update_fields=["user"])
+        old = Contract.objects.create(
+            state="gekuendigt",
+            date=datetime.date(2024, 1, 1),
+            date_end=datetime.date(2025, 12, 31),
+        )
+        old.contractors.add(cls.addresses[0])
+        old.rental_units.add(cls.rentalunits[2])
+        current = Contract.objects.create(
+            state="unterzeichnet", date=datetime.date(2026, 1, 1),
+        )
+        current.contractors.add(cls.addresses[2])
+        current.rental_units.add(cls.rentalunits[2])
+        category = DocumentType.objects.create(name="alumbris_old_contract_doc")
+        cls.old_doc = Document.objects.create(
+            name="Previous lease", doctype=category, data='{"private":"former"}',
+            content_object=old,
+        )
+        cls.new_doc = Document.objects.create(
+            name="Successor lease", doctype=category, data='{"private":"successor"}',
+            content_object=current,
+        )
+
+    def call(self, user, pk=None):
+        view = ResidentContractDocumentHistoryViewSet.as_view(
+            {"get": "retrieve" if pk is not None else "list"}
+        )
+        request = APIRequestFactory().get("/api/v1/geno/resident-contract-document-history/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_former_can_list_own_metadata_not_successor(self):
+        response = self.call(self.former)
+        self.assertEqual(response.status_code, 200)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertIn(self.old_doc.id, ids)
+        self.assertNotIn(self.new_doc.id, ids)
+        self.assertEqual(self.call(self.former, self.new_doc.id).status_code, 404)
+        self.assertEqual(self.call(self.successor, self.old_doc.id).status_code, 404)
+        self.assertEqual(
+            set(self.call(self.former, self.old_doc.id).data),
+            {"id", "name", "doctype", "ts_created"},
+        )
