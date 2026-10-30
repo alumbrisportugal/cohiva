@@ -6,10 +6,14 @@ on:
       - main
       - develop
 
+  pull_request:
+    branches:
+      - main
+      - develop
   workflow_dispatch: # allow manual trigger
 
 concurrency:
-  group: django-tests-${{ github.ref }}
+  group: django-quick-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted] # uses your self-hosted runner pool
+    runs-on: ubuntu-latest # isolated GitHub-hosted runner, never the NAS
 
     services:
       mariadb:
