@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0}header{background:#17324b;color:white;padding:1.25rem max(1rem,calc((100% - 1100px)/2))}
 main{max-width:1100px;margin:auto;padding:1.5rem 1rem}h1{margin:0;font-size:1.65rem}h2{font-size:1.15rem}
 nav{display:flex;flex-wrap:wrap;gap:.45rem;margin:1rem 0}button{cursor:pointer;border:1px solid #a5b6c4;border-radius:.45rem;padding:.65rem .85rem;background:white;color:#17324b}
-button[aria-pressed=true]{background:#17324b;color:white}button:disabled{opacity:.5;cursor:not-allowed}
+button[aria-pressed=true]{background:#17324b;color:white}button:disabled{opacity:.5;cursor:not-allowed}label{display:block;margin:.7rem 0 .25rem}input,select,textarea{display:block;width:100%;max-width:650px;padding:.65rem;border:1px solid #a5b6c4;border-radius:.4rem}textarea{min-height:110px}.panel{margin-bottom:1rem}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:.75rem}
 .card,.panel{background:white;border:1px solid #dbe3eb;border-radius:.8rem;padding:1rem}
 .card strong{font-size:1.7rem;display:block}#entries{display:grid;gap:.7rem}
@@ -35,6 +35,21 @@ button[aria-pressed=true]{background:#17324b;color:white}button:disabled{opacity
 <span id="pagination" class="muted"></span>
 <button id="next" type="button" disabled>Próxima página</button>
 </div>
+</section>
+<section class="panel" aria-labelledby="maintenance-title">
+<h2 id="maintenance-title">Comunicar uma avaria</h2>
+<form id="maintenance-form">
+<label for="maintenance-unit">Fração</label>
+<select id="maintenance-unit" required></select>
+<label for="maintenance-title-input">Assunto</label>
+<input id="maintenance-title-input" maxlength="140" required>
+<label for="maintenance-description">Descrição do problema</label>
+<textarea id="maintenance-description" minlength="10" maxlength="3000" required></textarea>
+<button type="submit" id="maintenance-submit">Enviar pedido</button>
+</form>
+<p id="maintenance-feedback" role="status" aria-live="polite"></p>
+<h2>Os meus pedidos</h2>
+<div id="maintenance-list"></div>
 </section>
 </main>
 <script>
@@ -110,6 +125,34 @@ for(const [key,label] of categories){
 }
 byId("previous").addEventListener("click",()=>{if(!loading && page>1){page--;refreshSection();}});
 byId("next").addEventListener("click",()=>{if(!loading && next){page++;refreshSection();}});
+async function loadMaintenance(){
+ const [units,tickets]=await Promise.all([json("rentalunit/"),json("resident-maintenance/")]);
+ const select=byId("maintenance-unit");select.replaceChildren();
+ for(const unit of units.results || units){const opt=element("option",unit.label||unit.name);opt.value=unit.id;select.append(opt);}
+ byId("maintenance-submit").disabled=!select.options.length;
+ const target=byId("maintenance-list");target.replaceChildren();
+ for(const ticket of tickets.results || tickets){
+  const row=element("div",undefined,"entry");
+  row.append(element("strong",ticket.title),element("div",ticket.status+" · "+new Date(ticket.created_at).toLocaleDateString("pt-PT"),"muted"));
+  target.append(row);
+ }
+ if(!target.children.length)target.append(element("p","Ainda não existem pedidos.","muted"));
+}
+byId("maintenance-form").addEventListener("submit",async event=>{
+ event.preventDefault();
+ const button=byId("maintenance-submit"),feedback=byId("maintenance-feedback");
+ button.disabled=true;feedback.textContent="A enviar pedido…";
+ try{
+  const cookie=document.cookie.split("; ").find(value=>value.startsWith("csrftoken="));
+  const token=cookie?decodeURIComponent(cookie.slice(10)):"";
+  const payload={rental_unit:Number(byId("maintenance-unit").value),title:byId("maintenance-title-input").value,description:byId("maintenance-description").value};
+  const response=await fetch(base+"resident-maintenance/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":token,"Accept":"application/json"},body:JSON.stringify(payload)});
+  if(!response.ok)throw new Error("Não foi possível registar o pedido ("+response.status+").");
+  byId("maintenance-form").reset();feedback.textContent="Pedido registado com sucesso.";
+  await loadMaintenance();
+ }catch(err){feedback.textContent=err.message;}finally{button.disabled=false;}
+});
+loadMaintenance().catch(err=>{byId("maintenance-feedback").textContent=err.message;});
 Promise.all([refreshOverview(),refreshSection()]).catch(e=>{error.textContent=e.message;error.hidden=false;});
 })();
 </script>
