@@ -1,0 +1,24 @@
+name: Alumbris pt-PT translation integrity
+on:
+  push:
+    paths:
+      - 'pwa/src/i18n/**'
+      - 'alumbris/check_pwa_i18n.py'
+      - '.github/workflows/alumbris-i18n-check.yml'
+  pull_request:
+    paths:
+      - 'pwa/src/i18n/**'
+      - 'alumbris/check_pwa_i18n.py'
+      - '.github/workflows/alumbris-i18n-check.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare European Portuguese with English catalog
+        run: python3 alumbris/check_pwa_i18n.py
