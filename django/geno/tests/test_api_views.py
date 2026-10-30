@@ -1243,3 +1243,30 @@ class AlumbrisResidentCapabilitiesTest(GenoAdminTestCase):
         self.assertEqual(len(result.data["timeline"]["kinds"]), 4)
         self.assertNotIn("tenant", str(result.data))
         self.assertNotIn("password", str(result.data))
+
+
+class AlumbrisResidentPortalPageTest(GenoAdminTestCase):
+    """HTML portal requires login and never embeds raw tenancy data."""
+
+    def test_anonymous_redirected_to_login(self):
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_authenticated_resident_can_open_portal(self):
+        user = get_user_model().objects.create_user(username="alumbris_page_visitor")
+        self.client.force_login(user)
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Alumbris Living")
+        self.assertContains(response, "resident-overview/")
+        self.assertContains(response, "resident-portfolio/sections/")
+        self.assertContains(response, "Sem registos nesta categoria")
+        self.assertNotContains(response, "password", status_code=200)
+
+    def test_portal_has_no_server_embedded_resident_records(self):
+        user = get_user_model().objects.create_user(username="alumbris_no_inline_data")
+        self.client.force_login(user)
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"private_document_data", response.content)
+        self.assertNotIn(b"resident_visible", response.content)
