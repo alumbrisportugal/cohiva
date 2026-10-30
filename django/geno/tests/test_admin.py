@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib import admin as django_admin
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.test import RequestFactory
@@ -23,6 +24,7 @@ from geno.models import (
     GenericAttribute,
     Member,
     RentalUnit,
+    ResidentMaintenanceRequest,
     Share,
     ShareType,
     TenantsView,
@@ -1091,3 +1093,44 @@ class AlumbrisDocumentVisibilityAdminTest(GenoAdminTestCase):
         self.admin.save_model(self.request, self.document, None, True)
         self.document.refresh_from_db()
         self.assertFalse(self.document.resident_visible)
+
+
+class AlumbrisMaintenanceAdminAuthorizationTest(GenoAdminTestCase):
+    """Staff must have explicit Django change permission to triage tickets."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.staff = get_user_model().objects.create_user(
+            username="alumbris_triage_staff", is_staff=True,
+        )
+        cls.ticket = ResidentMaintenanceRequest.objects.create(
+            resident=cls.staff, rental_unit=cls.rentalunits[0],
+            title="Avaria na porta",
+            description="A porta principal deixou de fechar corretamente.",
+        )
+
+    def setUp(self):
+        self.model_admin = admin.ResidentMaintenanceRequestAdmin(
+            ResidentMaintenanceRequest, django_admin.site,
+        )
+        self.request = RequestFactory().get("/admin/geno/residentmaintenancerequest/")
+        self.request.user = self.staff
+
+    def test_staff_without_change_permission_cannot_modify_ticket(self):
+        self.assertFalse(self.model_admin.has_change_permission(self.request, self.ticket))
+        self.assertIn("status", self.model_admin.get_readonly_fields(self.request, self.ticket))
+        self.assertFalse(self.model_admin.has_add_permission(self.request))
+        self.assertFalse(self.model_admin.has_delete_permission(self.request, self.ticket))
+
+    def test_authorized_staff_can_update_status_but_not_submission_fields(self):
+        permission = Permission.objects.get(codename="change_residentmaintenancerequest")
+        self.staff.user_permissions.add(permission)
+        self.staff = get_user_model().objects.get(pk=self.staff.pk)
+        self.request.user = self.staff
+        self.assertTrue(self.model_admin.has_change_permission(self.request, self.ticket))
+        readonly = self.model_admin.get_readonly_fields(self.request, self.ticket)
+        self.assertNotIn("status", readonly)
+        self.assertIn("description", readonly)
+        self.assertIn("rental_unit", readonly)
