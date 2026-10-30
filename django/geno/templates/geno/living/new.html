@@ -1,0 +1,12 @@
+{% extends 'geno/living/base.html' %}
+{% block title %}Novo arrendamento{% endblock %}
+{% block content %}
+<h1>Novo arrendamento</h1>
+<p>Regista uma nova fração e o respetivo contrato na carteira. Podes reutilizar um edifício e um contacto existentes.</p>
+<p class="note">Valores em euros, numa instalação dedicada a EUR. O registo não emite recibos fiscais, não recebe pagamentos e não cria contas de acesso para residentes.</p>
+<form method="post" class="card">{% csrf_token %}
+  {% if form.errors %}<div role="alert"><h2>Confirma os dados indicados</h2>{{ form.non_field_errors }}</div>{% endif %}
+  <div class="fields">{% for field in form %}<div>{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}</div>
+  <p><button type="submit">Guardar arrendamento</button></p>
+</form>
+{% endblock %}

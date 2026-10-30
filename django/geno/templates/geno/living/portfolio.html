@@ -1,0 +1,11 @@
+{% extends 'geno/living/base.html' %}
+{% block content %}
+<h1>Carteira de arrendamentos</h1><p>{{ page.paginator.count }} contratos registados</p>
+<a class="button" href="{% url 'geno:living-new' %}">Novo arrendamento</a>
+{% for contract in page %}<article class="card"><h2><a href="{% url 'geno:living-contract' contract.pk %}">Contrato {{ contract.pk }}</a></h2>
+<p>{% for unit in contract.rental_units.all %}{{ unit.building.name }} · {{ unit.name }}{% if not forloop.last %}; {% endif %}{% endfor %}</p>
+<p>{% for person in contract.contractors.all %}{{ person.first_name }} {{ person.name }}{% if not forloop.last %}; {% endif %}{% endfor %}</p>
+<p>Início: {{ contract.date|date:'d/m/Y' }} · Fim: {{ contract.date_end|date:'d/m/Y'|default:'Sem data definida' }}</p></article>
+{% empty %}<p class="card">Ainda não existem arrendamentos. Começa por registar a primeira fração.</p>{% endfor %}
+<nav aria-label="Páginas">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}">Anterior</a>{% endif %} Página {{ page.number }} de {{ page.paginator.num_pages }} {% if page.has_next %}<a href="?page={{ page.next_page_number }}">Seguinte</a>{% endif %}</nav>
+{% endblock %}

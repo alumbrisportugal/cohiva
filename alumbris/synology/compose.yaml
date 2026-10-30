@@ -1,0 +1,61 @@
+# Disposable staging only. Host publication is loopback HTTPS, never DB/Redis.
+services:
+  db:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: living_django_test
+      MARIADB_USER: living
+      MARIADB_PASSWORD: ${DB_PASSWORD:?required}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?required}
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 768m
+    cpus: 0.75
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --save, '', --appendonly, 'no']
+    mem_limit: 128m
+    cpus: 0.25
+  web:
+    image: alumbris-living-test:141ae832
+    working_dir: /cohiva
+    environment:
+      DJANGO_SETTINGS_MODULE: cohiva.settings_living
+      DB_PASSWORD: ${DB_PASSWORD:?required}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?required}
+      LIVING_BASE_URL: https://localhost:18443
+    command: [gunicorn, cohiva.wsgi:application, --workers, '1', --bind, '0.0.0.0:8000', --timeout, '90']
+    volumes:
+      - ./source/django:/cohiva:ro
+      - data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    mem_limit: 1536m
+    cpus: 0.75
+    security_opt:
+      - no-new-privileges:true
+  tls:
+    image: caddy:2-alpine
+    command: [caddy, reverse-proxy, --from, 'https://localhost:18443', --to, 'http://web:8000', --internal-certs]
+    ports:
+      - '127.0.0.1:18443:18443'
+    volumes:
+      - tls:/data
+      - tls_config:/config
+    depends_on:
+      - web
+    mem_limit: 128m
+    cpus: 0.25
+volumes:
+  db:
+  data:
+  tls:
+  tls_config:

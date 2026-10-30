@@ -196,3 +196,11 @@
 - Access to all residents' repair tickets now requires `geno.view_residentmaintenancerequest`; a staff flag alone does not disclose other tenants' requests.
 - Staff without this permission can see only tickets they personally own. Tests cover denied access, explicit grant, and permitted read access.
 - Existing status changes still require the separate `geno.change_residentmaintenancerequest` permission.
+
+## Consolidação Work — 30/10/2026
+
+Consultar `FUNCTIONAL_MATRIX.md` como matriz única de implementação/aceitação.
+Novo percurso de gestão: `/geno/living/`, com ativação explícita EUR, permissões
+Django, reutilização dos quatro modelos nativos e gravação atómica. Não completa
+cobrança, fiscalidade, cauções ou renovação. Infraestrutura descartável em
+`synology/`; estado dos ensaios em `reports/`. PR permanece draft.
