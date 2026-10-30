@@ -200,12 +200,13 @@ class ResidentPortfolioView(APIView):
             viewset = viewset_class()
             viewset.request = request
             queryset = viewset.get_queryset().order_by("pk")
+            total = queryset.count()
             payload[key] = {
-                "total": queryset.count(),
+                "total": total,
                 "items": serializer_class(
                     queryset[:self.MAX_ITEMS_PER_SECTION], many=True,
                 ).data,
-                "truncated": queryset.count() > self.MAX_ITEMS_PER_SECTION,
+                "truncated": total > self.MAX_ITEMS_PER_SECTION,
             }
         return Response(payload)
 
