@@ -723,6 +723,20 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
         Contract.objects.filter(pk=self.contracts[0].pk).update(active=False)
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
 
+    def test_contract_termination_removes_current_document(self):
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
+        contract = self.contracts[0]
+        contract.date_end = datetime.date(2025, 12, 31)
+        contract.save(update_fields=["date_end"])
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
+
+    def test_invalid_contract_state_blocks_current_document(self):
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
+        contract = self.contracts[0]
+        contract.state = "ungueltig"
+        contract.save(update_fields=["state"])
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
+
     def test_revocation_immediately_removes_current_document(self):
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
         self.own.resident_visible = False
