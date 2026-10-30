@@ -191,3 +191,8 @@
   protected requests.
 - Staff notifications, server-side pagination, event audit trail, attachment
   scanning and cross-browser acceptance tests remain pending. No release.
+
+## Maintenance staff access segregation
+- Access to all residents' repair tickets now requires `geno.view_residentmaintenancerequest`; a staff flag alone does not disclose other tenants' requests.
+- Staff without this permission can see only tickets they personally own. Tests cover denied access, explicit grant, and permitted read access.
+- Existing status changes still require the separate `geno.change_residentmaintenancerequest` permission.
