@@ -1364,6 +1364,17 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         self.assertEqual(self.call(staff, pk=ticket.pk).status_code, 200)
         self.assertEqual(self.call(staff).data["count"], 1)
 
+    def test_admin_rental_unit_change_page_with_ticket_renders(self):
+        ticket = ResidentMaintenanceRequest.objects.create(
+            resident=self.tenant, rental_unit=self.rentalunits[0],
+            title="Porta danificada", description="A porta da entrada já não fecha bem.",
+        )
+        response = self.client.get(
+            reverse("admin:geno_rentalunit_change", args=[self.rentalunits[0].pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ResidentMaintenanceRequest.objects.filter(pk=ticket.pk).exists())
+
     def test_non_owner_cannot_update_existing_ticket(self):
         ticket = ResidentMaintenanceRequest.objects.create(
             resident=self.tenant, rental_unit=self.rentalunits[0],
