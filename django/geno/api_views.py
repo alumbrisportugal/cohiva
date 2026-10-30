@@ -205,8 +205,8 @@ class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
 class ResidentContractDocumentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     """Historical document metadata only, limited to original ended contracts.
 
-    This does not grant file download access. Documents created after the
-    contract ended are excluded conservatively pending retention-policy review.
+    This does not grant file download access. Document creation dates are not
+    used to prove ownership: metadata remains bound to the original contract.
     """
 
     serializer_class = ResidentContractDocumentSerializer
