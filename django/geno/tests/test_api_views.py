@@ -556,6 +556,32 @@ class AlumbrisResidentInvoiceAPITest(GenoAdminTestCase):
         self.assertEqual(self.call(self.resident, self.foreign.id).status_code, 404)
         self.assertEqual(self.call(self.stranger, self.own.id).status_code, 404)
 
+    def test_expired_future_and_cancelled_invoice_access_denied(self):
+        for state, start, end in (
+            ("unterzeichnet", datetime.date(2020, 1, 1),
+             datetime.date.today() - datetime.timedelta(days=1)),
+            ("unterzeichnet", datetime.date.today() + datetime.timedelta(days=1), None),
+            ("gekuendigt", datetime.date(2020, 1, 1), None),
+            ("ungueltig", datetime.date(2020, 1, 1), None),
+        ):
+            with self.subTest(state=state, start=start, end=end):
+                contract = Contract.objects.create(
+                    state=state, date=start, date_end=end,
+                )
+                contract.contractors.add(self.addresses[0])
+                contract.rental_units.add(self.rentalunits[3])
+                invoice = Invoice.objects.create(
+                    name="Restricted period invoice",
+                    date=datetime.date.today(), amount=500,
+                    contract=contract,
+                    invoice_category=self.own.invoice_category,
+                )
+                self.assertEqual(self.call(self.resident, invoice.id).status_code, 404)
+                self.assertNotIn(
+                    invoice.id,
+                    {row["id"] for row in self.call(self.resident).data["results"]},
+                )
+
     def test_invoice_projection_excludes_accounting_fields(self):
         response = self.call(self.resident, self.own.id)
         self.assertEqual(response.status_code, 200)
