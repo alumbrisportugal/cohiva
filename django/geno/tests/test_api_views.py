@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -1104,3 +1104,59 @@ class AlumbrisResidentPortfolioPaginationTest(GenoAdminTestCase):
         self.doc.resident_visible = False
         self.doc.save(update_fields=["resident_visible"])
         self.assertEqual(self.call(self.tenant).data["total"], 0)
+
+
+class AlumbrisResidentTimelineTest(GenoAdminTestCase):
+    """Timeline only includes current tenant events and published documents."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.tenant = get_user_model().objects.create_user(username="alumbris_timeline_tenant")
+        cls.stranger = get_user_model().objects.create_user(username="alumbris_timeline_stranger")
+        cls.addresses[0].user = cls.tenant
+        cls.addresses[0].save(update_fields=["user"])
+        cls.type = DocumentType.objects.create(name="alumbris_timeline_document")
+        cls.visible = Document.objects.create(
+            name="Lease published", doctype=cls.type,
+            data='{"secret":"never return"}', resident_visible=True,
+            content_object=cls.contracts[0],
+        )
+        cls.private = Document.objects.create(
+            name="Internal memo", doctype=cls.type,
+            data='{"secret":"private"}', resident_visible=False,
+            content_object=cls.contracts[0],
+        )
+
+    def call(self, user):
+        request = APIRequestFactory().get("/api/v1/geno/resident-timeline/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return ResidentTimelineView.as_view()(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_timeline_document",))
+    def test_timeline_includes_only_own_published_document(self):
+        result = self.call(self.tenant)
+        self.assertEqual(result.status_code, 200)
+        document_events = [event for event in result.data["events"] if event["kind"] == "document"]
+        self.assertIn(self.visible.pk, [event["id"] for event in document_events])
+        self.assertNotIn(self.private.pk, [event["id"] for event in document_events])
+        self.assertEqual(self.call(self.stranger).data["events"], [])
+        self.assertTrue(all(
+            set(event) == {"kind", "id", "title", "date"}
+            for event in result.data["events"]
+        ))
+        self.assertEqual(result.data["limit"], 30)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_timeline_document",))
+    def test_revocation_immediately_excludes_document_from_timeline(self):
+        self.assertTrue(any(e["id"] == self.visible.pk and e["kind"] == "document"
+                            for e in self.call(self.tenant).data["events"]))
+        self.visible.resident_visible = False
+        self.visible.save(update_fields=["resident_visible"])
+        self.assertFalse(any(e["id"] == self.visible.pk and e["kind"] == "document"
+                             for e in self.call(self.tenant).data["events"]))
