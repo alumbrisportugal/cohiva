@@ -262,16 +262,23 @@ class ResidentPortfolioSectionView(APIView):
 
 
 class ResidentTimelineView(APIView):
-    """Recent resident events from already-authorized records only.
+    """Tenant-authorized, bounded and filterable activity timeline.
 
-    The timeline is a bounded read-only view, not a payment ledger or
-    official Portuguese fiscal history. No unapproved documents are exposed.
+    Only published document metadata and permitted invoice summaries are
+    represented. This is not an official fiscal or payment history.
     """
 
     permission_classes = [permissions.IsAuthenticated]
     MAX_EVENTS = 30
+    VALID_KINDS = (
+        "invoice", "historical_invoice", "document", "historical_document",
+    )
 
     def get(self, request):
+        kinds = request.query_params.getlist("kind")
+        if any(kind not in self.VALID_KINDS for kind in kinds):
+            raise ValidationError({"kind": "Unknown timeline event type."})
+        selected = set(kinds or self.VALID_KINDS)
         sources = (
             ("invoice", ResidentInvoiceViewSet, "date", "name"),
             ("historical_invoice", ResidentInvoiceHistoryViewSet, "date", "name"),
@@ -280,6 +287,8 @@ class ResidentTimelineView(APIView):
         )
         events = []
         for kind, viewset_class, date_field, title_field in sources:
+            if kind not in selected:
+                continue
             viewset = viewset_class()
             viewset.request = request
             queryset = viewset.get_queryset().order_by("-" + date_field, "-pk")
@@ -289,10 +298,17 @@ class ResidentTimelineView(APIView):
                     "kind": kind,
                     "id": item.pk,
                     "title": getattr(item, title_field),
-                    "date": timestamp.date().isoformat() if isinstance(timestamp, datetime) else timestamp.isoformat(),
+                    "date": timestamp.date().isoformat()
+                    if isinstance(timestamp, datetime) else timestamp.isoformat(),
                 })
-        events.sort(key=lambda item: (item["date"], item["kind"], item["id"]), reverse=True)
-        return Response({"events": events[:self.MAX_EVENTS], "limit": self.MAX_EVENTS})
+        events.sort(
+            key=lambda item: (item["date"], item["kind"], item["id"]),
+            reverse=True,
+        )
+        return Response({
+            "events": events[:self.MAX_EVENTS],
+            "limit": self.MAX_EVENTS,
+        })
 
 
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
