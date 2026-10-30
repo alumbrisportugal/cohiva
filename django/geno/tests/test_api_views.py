@@ -675,6 +675,7 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
         cls.addresses[0].save(update_fields=["user"])
         cls.type = DocumentType.objects.create(name="alumbris_test_contract_doc")
         cls.own = Document.objects.create(
+            resident_visible=True,
             name="Own contract", doctype=cls.type, data='{"private":"never expose"}',
             content_object=cls.contracts[0],
         )
@@ -704,6 +705,17 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
     def test_default_deny_exposes_no_document_metadata(self):
         self.assertEqual(self.call(self.resident).data["count"], 0)
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
+
+    def test_private_document_hidden_even_with_allowed_type(self):
+        private = Document.objects.create(
+            name="Internal note", doctype=self.type, resident_visible=False,
+            data='{"secret":true}', content_object=self.contracts[0],
+        )
+        self.assertEqual(self.call(self.resident, private.id).status_code, 404)
+        self.assertNotIn(
+            private.id,
+            {entry["id"] for entry in self.call(self.resident).data["results"]},
+        )
 
     def test_own_metadata_only(self):
         result = self.call(self.resident)
@@ -746,6 +758,7 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
         current.rental_units.add(cls.rentalunits[2])
         category = DocumentType.objects.create(name="alumbris_old_contract_doc")
         cls.old_doc = Document.objects.create(
+            resident_visible=True,
             name="Previous lease", doctype=category, data='{"private":"former"}',
             content_object=old,
         )
