@@ -1,0 +1,4 @@
+alumbris-living-test-20261030-web-1 0.01% 215.5MiB / 1.5GiB 0B / 0B
+alumbris-living-test-20261030-db-1 2.64% 364.1MiB / 768MiB 0B / 0B
+alumbris-living-test-20261030-redis-1 0.79% 3.727MiB / 128MiB 0B / 0B
+alumbris-living-test-20261030-tls-1 0.00% 13.97MiB / 128MiB 0B / 0B

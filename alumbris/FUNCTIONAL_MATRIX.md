@@ -6,7 +6,7 @@ Estado: **existente** = código nativo inspecionado; **adaptado** = código nest
 
 | Processo / cenário | Reutilização confirmada | Adaptação / lacuna | Aceitação / estado |
 |---|---|---|---|
-| Edifícios e frações / 1 | `geno.Building`, `RentalUnit`; admin nativo | Formulário pt-PT, renda mensal; não recria modelos | Adaptado; testes `test_living`; navegador pendente |
+| Edifícios e frações / 1 | `geno.Building`, `RentalUnit`; admin nativo | Formulário pt-PT, renda mensal; não recria modelos | Adaptado; testes `test_living` e Chromium real no NAS aprovados para nova fração/contrato |
 | Contactos / 1 | `Address`; ligação opcional a utilizador | Contacto novo ou existente; conta de residente não criada automaticamente | Adaptado; atribuição de conta e convite pendentes |
 | Contratos / 1 | `Contract`, M2M titulares/frações, datas, estados | Novo percurso usa proposta/assinado, data e renda da fração | Adaptado; condições detalhadas, cotitulares no formulário e edição pendentes |
 | Proprietários e permissões por imóvel | Staff e permissões de modelo existentes | Novo gestor é global, exige 4 permissões de leitura e, para criar, 4 de adição | Proprietários e delegação limitada por imóvel pendentes |
@@ -19,10 +19,10 @@ Estado: **existente** = código nativo inspecionado; **adaptado** = código nest
 | Despesas e demonstrativos | `finance` com backends GnuCash/CashCtrl | Configuração portuguesa e painel por imóvel pendentes | Existente/adaptável |
 | Fiscalidade / 3 | Documentos e faturas internas | Fatura Cohiva não é recibo AT; revisão oficial portuguesa antes de implementar | Pendente; nenhuma emissão fiscal disponível |
 | Manutenção / 4 | Modelos 0034/0035, API, admin, portal | Atribuição, anexos, agendamento, notificações, histórico de estado em falta | Adaptado parcialmente; cenário completo pendente |
-| Documentos e privacidade / 6 | `resident_visible`, allowlist, querysets de titularidade | Descarregamento protegido ainda indisponível | Testes CI da base aprovados; navegador e revisão documental pendentes |
-| Interface premium | Vue/Quasar/PWA, portal HTML Django | Gestão Django pt-PT reutiliza servidor e dados; unificação de navegação e design pendentes | Adaptado parcialmente; sem nova stack |
-| Backup/restauro/rollback / 7 | MariaDB e ficheiros persistentes | Ensaiar dados, ficheiros, segredos/chaves e imagem anterior | Pendente |
-| Instalação NAS / 8 | Dockerfile nativo Python 3.13, MariaDB e Redis | Compose de teste sem portas DB/Redis, TLS próprio, recursos limitados | Ensaio iniciado; não homologado |
+| Documentos e privacidade / 6 | `resident_visible`, allowlist, querysets de titularidade | Descarregamento protegido ainda indisponível | Testes CI da base e HTTPS real de isolamento contrato/fração/manutenção aprovados; revisão documental pendente |
+| Interface premium | Vue/Quasar/PWA, portal HTML Django | Gestão Django pt-PT reutiliza servidor e dados; unificação de navegação e design pendentes | Gestão criada em Django existente, desktop/mobile ensaiados; restante unificação pendente |
+| Backup/restauro/rollback / 7 | MariaDB, ficheiros, configuração e chaves | Restauro em segunda MariaDB sem rede; checksums, views e consulta autenticada; rollback específico sem novas migrações | Restauro e rollback específico sem novas migrações aprovados; limites no relatório |
+| Instalação NAS / 8 | Dockerfile nativo Python 3.13, MariaDB e Redis | Compose de teste sem portas DB/Redis, TLS próprio, recursos limitados | Instalação, migrações, HTTPS e navegador reais aprovados neste ensaio; não homologado comercialmente |
 | Baseline DSM 7.2.1 | Docker AMD64 | NAS disponível reporta DSM **7.4.1-90080 Update 1**, DS220+, J4025, 18 GB | Compatibilidade 7.2.1 não demonstrável neste hardware atual |
 
 ## Fronteiras do lote
@@ -34,3 +34,9 @@ Estado: **existente** = código nativo inspecionado; **adaptado** = código nest
 - Não usa `Tenant` como titular: é uma associação comunitária ao edifício; `Contract.contractors` é a fonte de titularidade contratual.
 - Sem novas migrações neste lote: são reutilizadas tabelas nativas, incluindo `auditlog`, configurado no upstream para todos os modelos e ator no middleware.
 - A base passou as quatro suites obrigatórias no commit auditado. Consultar `reports/` para resultados deste lote; nunca transferir aprovação de um SHA para outro.
+
+## Evidência deste marco
+
+Consultar `reports/2026-10-30/REPORT.md` e respetivos registos/capturas.
+A correção de login mantém residentes em `/portal/login/`; restantes páginas de gestão
+continuam no login administrativo. O middleware nunca transforma um residente em staff.

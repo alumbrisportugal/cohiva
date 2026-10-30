@@ -1,0 +1,29 @@
+/usr/local/lib/python3.13/site-packages/piecash/core/book.py:343: SyntaxWarning: invalid escape sequence '\*'
+  (uses the sqlalchemy session.query(cls).filter_by(\*\*kwargs).one() underneath)::
+/usr/local/lib/python3.13/site-packages/saml2/cryptography/symmetric.py:108: CryptographyDeprecationWarning: CFB has been moved to cryptography.hazmat.decrepit.ciphers.modes.CFB and will be removed from cryptography.hazmat.primitives.ciphers.modes in 49.0.0.
+  "cfb": _ciphers.modes.CFB,
+Found 14 test(s).
+Using existing test database for alias 'default'...
+System check identified some issues:
+
+WARNINGS:
+wagtailmenus.FlatMenu: (wagtailadmin.W002) FlatMenu.content_panels will have no effect on snippets editing
+	HINT: Ensure that FlatMenu uses `panels` instead of `content_panels` or set up an `edit_handler` if you want a tabbed editing interface.
+There are no default tabs on non-Page models so there will be no Content tab for the content_panels to render in.
+wagtailmenus.FlatMenu: (wagtailadmin.W002) FlatMenu.settings_panels will have no effect on snippets editing
+	HINT: Ensure that FlatMenu uses `panels` instead of `settings_panels` or set up an `edit_handler` if you want a tabbed editing interface.
+There are no default tabs on non-Page models so there will be no Settings tab for the settings_panels to render in.
+wagtailmenus.MainMenu: (wagtailadmin.W002) MainMenu.content_panels will have no effect on snippets editing
+	HINT: Ensure that MainMenu uses `panels` instead of `content_panels` or set up an `edit_handler` if you want a tabbed editing interface.
+There are no default tabs on non-Page models so there will be no Content tab for the content_panels to render in.
+wagtailmenus.MainMenu: (wagtailadmin.W002) MainMenu.settings_panels will have no effect on snippets editing
+	HINT: Ensure that MainMenu uses `panels` instead of `settings_panels` or set up an `edit_handler` if you want a tabbed editing interface.
+There are no default tabs on non-Page models so there will be no Settings tab for the settings_panels to render in.
+
+System check identified 4 issues (1 silenced).
+..............
+----------------------------------------------------------------------
+Ran 14 tests in 3.367s
+
+OK
+Preserving test database for alias 'default'...

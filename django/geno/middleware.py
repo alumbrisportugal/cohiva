@@ -3,6 +3,8 @@ import re
 from http import HTTPStatus
 from urllib.parse import urlparse, urlunparse
 
+from django.conf import settings
+
 import geno.settings
 
 logger = logging.getLogger(__name__)
@@ -30,7 +32,8 @@ class LoginRedirectMiddleware:
     Middleware to redirect login requests to the appropriate login page
     based on the URL path that triggered the login requirement.
 
-    - /admin/* and /geno/* URLs redirect to /admin/login/
+    - /geno/resident/* redirects to /portal/login/ when the portal is enabled
+    - Other /admin/* and /geno/* URLs redirect to /admin/login/
     - /portal/* URLs redirect to /portal/login/
     - All other URLs use the default LOGIN_URL setting
 
@@ -71,7 +74,11 @@ class LoginRedirectMiddleware:
         # Determine the correct login path based on original request path
         correct_login_path = None
 
-        if request.path.startswith("/admin/") or request.path.startswith("/geno/"):
+        if request.path.startswith("/geno/resident/") and "portal" in settings.COHIVA_FEATURES:
+            # Residents must use the portal login; Django admin rejects non-staff accounts.
+            if redirect_path == self.ADMIN_LOGIN_PATH:
+                correct_login_path = self.PORTAL_LOGIN_PATH
+        elif request.path.startswith("/admin/") or request.path.startswith("/geno/"):
             # Admin/geno paths should go to admin login
             if redirect_path == self.PORTAL_LOGIN_PATH:
                 correct_login_path = self.ADMIN_LOGIN_PATH

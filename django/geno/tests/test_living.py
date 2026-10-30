@@ -1,5 +1,6 @@
 import datetime
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from auditlog.models import LogEntry
 from django.contrib.auth import get_user_model
@@ -173,3 +174,15 @@ class LivingWorkflowTest(TestCase):
             response = self.client.post(self.new_url, self.data)
         self.assertContains(response, "Confirma os dados")
         self.assertFalse(Contract.objects.exists())
+
+    def test_resident_portal_uses_resident_login(self):
+        self.client.logout()
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(urlsplit(response.url).path, "/portal/login/")
+        self.assertIn("next=", response.url)
+
+    @override_settings(LOGIN_URL="/admin/login/")
+    def test_resident_login_rewrites_admin_default(self):
+        self.client.logout()
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(urlsplit(response.url).path, "/portal/login/")

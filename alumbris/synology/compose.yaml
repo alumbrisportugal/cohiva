@@ -15,12 +15,14 @@ services:
       timeout: 5s
       retries: 12
     mem_limit: 768m
-    cpus: 0.75
+    cpu_shares: 512
   redis:
     image: redis:7-alpine
     command: [redis-server, --save, '', --appendonly, 'no']
+    volumes:
+      - redis:/data
     mem_limit: 128m
-    cpus: 0.25
+    cpu_shares: 128
   web:
     image: alumbris-living-test:141ae832
     working_dir: /cohiva
@@ -39,7 +41,7 @@ services:
       redis:
         condition: service_started
     mem_limit: 1536m
-    cpus: 0.75
+    cpu_shares: 512
     security_opt:
       - no-new-privileges:true
   tls:
@@ -53,9 +55,10 @@ services:
     depends_on:
       - web
     mem_limit: 128m
-    cpus: 0.25
+    cpu_shares: 128
 volumes:
   db:
+  redis:
   data:
   tls:
   tls_config:

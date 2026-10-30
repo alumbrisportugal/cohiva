@@ -1,0 +1,1 @@
+{"requests": 20, "successes": 20, "concurrency": 1, "median_ms": 17.32, "p95_ms": 27.15, "max_ms": 4169.56, "scope": "authenticated contract read, sequential sample only"}
