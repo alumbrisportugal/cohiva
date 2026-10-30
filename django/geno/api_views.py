@@ -30,6 +30,7 @@ from geno.serializers import (
     RentalUnitSerializer,
     ResidentContractSerializer,
     ResidentRentalUnitSerializer,
+    ResidentInvoiceSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -125,6 +126,27 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
             .filter(Q(date_end__isnull=True) | Q(date_end__gte=today))
             .distinct()
         )
+
+
+class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
+    """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
+
+    queryset = Invoice.objects.filter(active=True, contract__isnull=False)
+    serializer_class = ResidentInvoiceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return queryset.filter(
+            Q(contract__date_end__isnull=True) | Q(contract__date_end__gte=today),
+            contract__state="unterzeichnet",
+            contract__date__lte=today,
+            contract__contractors__user=user,
+        ).distinct()
 
 
 class Akonto(APIView):
