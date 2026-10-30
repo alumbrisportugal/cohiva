@@ -339,6 +339,42 @@ class ResidentTimelineView(APIView):
         })
 
 
+class ResidentCapabilitiesView(APIView):
+    """Machine-readable portal contract; does not confer authorization.
+
+    Feature discovery reports route/schema support without exposing models,
+    settings, monetary data or any tenant's records.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            "api_version": 1,
+            "read_only": True,
+            "overview": True,
+            "portfolio": {
+                "enabled": True,
+                "max_items_per_section": ResidentPortfolioView.MAX_ITEMS_PER_SECTION,
+                "sections": (
+                    "current-contracts", "historical-contracts", "current-units",
+                    "current-invoices", "historical-invoices",
+                    "current-documents", "historical-documents",
+                ),
+                "page_size": ResidentPortfolioSectionView.PAGE_SIZE,
+            },
+            "timeline": {
+                "enabled": True,
+                "max_events": ResidentTimelineView.MAX_EVENTS,
+                "kinds": ResidentTimelineView.VALID_KINDS,
+                "date_filters": ("from_date", "to_date"),
+            },
+            "document_download": False,
+            "online_payments": False,
+            "official_pt_tax_receipts": False,
+        })
+
+
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
 
