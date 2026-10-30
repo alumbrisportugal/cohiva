@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -850,3 +850,98 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
             set(self.call(self.former, self.old_doc.id).data),
             {"id", "name", "doctype", "ts_created"},
         )
+
+
+class AlumbrisResidentPortalOverviewTest(GenoAdminTestCase):
+    """One dashboard summary, no cross-tenant contract or invoice details."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.former = get_user_model().objects.create_user(username="alumbris_overview_former")
+        cls.successor = get_user_model().objects.create_user(username="alumbris_overview_successor")
+        cls.stranger = get_user_model().objects.create_user(username="alumbris_overview_stranger")
+        cls.addresses[0].user = cls.former
+        cls.addresses[0].save(update_fields=["user"])
+        cls.addresses[2].user = cls.successor
+        cls.addresses[2].save(update_fields=["user"])
+        cls.old_contract = Contract.objects.create(
+            state="gekuendigt", date=datetime.date(2024, 1, 1),
+            date_end=datetime.date(2025, 12, 31),
+        )
+        cls.old_contract.contractors.add(cls.addresses[0])
+        cls.old_contract.rental_units.add(cls.rentalunits[2])
+        cls.new_contract = Contract.objects.create(
+            state="unterzeichnet", date=datetime.date(2026, 1, 1),
+        )
+        cls.new_contract.contractors.add(cls.addresses[2])
+        cls.new_contract.rental_units.add(cls.rentalunits[2])
+        category = InvoiceCategory.objects.get(name="Mietzins wiederkehrend")
+        cls.old_invoice = Invoice.objects.create(
+            name="Former resident rent", date=datetime.date(2025, 11, 1),
+            amount=650, contract=cls.old_contract, invoice_category=category,
+        )
+        cls.new_invoice = Invoice.objects.create(
+            name="Successor resident rent", date=datetime.date(2026, 8, 1),
+            amount=700, contract=cls.new_contract, invoice_category=category,
+        )
+
+    def history(self, user, pk=None):
+        view = ResidentContractHistoryViewSet.as_view(
+            {"get": "retrieve" if pk is not None else "list"}
+        )
+        request = APIRequestFactory().get("/api/v1/geno/resident-contract-history/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def overview(self, user):
+        request = APIRequestFactory().get("/api/v1/geno/resident-overview/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return ResidentOverviewView.as_view()(request)
+
+    def test_anonymous_denied_on_both_routes(self):
+        self.assertIn(self.history(None).status_code, (401, 403))
+        self.assertIn(self.overview(None).status_code, (401, 403))
+
+    def test_historical_contract_owned_only_by_original_party(self):
+        response = self.history(self.former)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.old_contract.pk, {row["id"] for row in response.data["results"]})
+        self.assertEqual(self.history(self.former, self.old_contract.pk).status_code, 200)
+        self.assertEqual(self.history(self.successor, self.old_contract.pk).status_code, 404)
+        self.assertEqual(self.history(self.stranger, self.old_contract.pk).status_code, 404)
+        self.assertEqual(self.history(self.former, self.new_contract.pk).status_code, 404)
+        self.assertEqual(
+            set(self.history(self.former, self.old_contract.pk).data),
+            {"id", "rental_units", "state", "date", "date_end"},
+        )
+
+    def test_void_contract_excluded_from_historical_endpoint(self):
+        self.old_contract.state = "ungueltig"
+        self.old_contract.save(update_fields=["state"])
+        self.assertEqual(self.history(self.former, self.old_contract.pk).status_code, 404)
+
+    def test_dashboard_only_returns_counts_and_preserves_tenant_isolation(self):
+        former = self.overview(self.former)
+        successor = self.overview(self.successor)
+        stranger = self.overview(self.stranger)
+        self.assertEqual(former.status_code, 200)
+        self.assertEqual(successor.status_code, 200)
+        self.assertEqual(stranger.status_code, 200)
+        self.assertEqual(former.data["historical_contracts"], 1)
+        self.assertEqual(former.data["historical_invoices"], 1)
+        self.assertEqual(successor.data["historical_contracts"], 0)
+        self.assertEqual(successor.data["historical_invoices"], 0)
+        self.assertEqual(stranger.data["current_invoices"], 0)
+        self.assertEqual(stranger.data["historical_invoices"], 0)
+        self.assertEqual(
+            set(former.data),
+            {"current_contracts", "historical_contracts", "current_units",
+             "current_invoices", "historical_invoices",
+             "current_documents", "historical_documents"},
+        )
+        self.assertNotIn("amount", str(former.data))
+        self.assertNotIn("data", str(former.data))
