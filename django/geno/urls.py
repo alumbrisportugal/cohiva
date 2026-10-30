@@ -4,6 +4,7 @@ from . import views as geno_views
 
 app_name = "geno"
 urlpatterns = [
+    path("resident/portal/", geno_views.resident_portal, name="resident-portal"),
     re_path(r"^import/([a-z_-]+)/?$", geno_views.import_generic),
     re_path(r"^export/([a-z_-]+)/?$", geno_views.export_generic, name="generic-export"),
     re_path(r"^documents/([a-z_-]+)/([0-9]+)/([a-z_-]+)/?$", geno_views.documents),
