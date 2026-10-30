@@ -3,6 +3,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.http import FileResponse
 from django.test import override_settings, tag
 from django.urls import reverse
@@ -1375,6 +1376,12 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         staff = get_user_model().objects.create_user(
             username="alumbris_maintenance_staff", is_staff=True,
         )
+        self.assertEqual(self.call(staff, pk=ticket.pk).status_code, 404)
+        self.assertEqual(self.call(staff).data["count"], 0)
+        staff.user_permissions.add(
+            Permission.objects.get(codename="view_residentmaintenancerequest")
+        )
+        staff = get_user_model().objects.get(pk=staff.pk)
         self.assertEqual(self.call(staff, pk=ticket.pk).status_code, 200)
         self.assertEqual(self.call(staff).data["count"], 1)
 
