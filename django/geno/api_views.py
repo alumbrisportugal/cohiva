@@ -276,6 +276,13 @@ class ResidentTimelineView(APIView):
 
     def get(self, request):
         kinds = request.query_params.getlist("kind")
+        # Reject duplicated or ambiguous scalar filters instead of silently
+        # using the final value supplied by the client.
+        for scalar in ("from_date", "to_date"):
+            if len(request.query_params.getlist(scalar)) > 1:
+                raise ValidationError({scalar: "Provide exactly one date."})
+        if len(kinds) > len(self.VALID_KINDS):
+            raise ValidationError({"kind": "Too many event types."})
         if any(kind not in self.VALID_KINDS for kind in kinds):
             raise ValidationError({"kind": "Unknown timeline event type."})
         selected = set(kinds or self.VALID_KINDS)
