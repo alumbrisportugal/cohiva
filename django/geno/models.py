@@ -1411,6 +1411,11 @@ class DocumentType(GenoBase):
 
 
 class Document(GenoBase):
+    # Explicitly opt in each individual document after a privacy review.
+    # Existing documents and newly generated documents remain staff-only.
+    resident_visible = models.BooleanField(
+        "Visible to contract residents", default=False, db_index=True
+    )
     name = models.CharField("Name", max_length=250)
     doctype = models.ForeignKey(DocumentType, verbose_name="Dokumenttyp", on_delete=models.CASCADE)
     data = models.TextField("Data")
