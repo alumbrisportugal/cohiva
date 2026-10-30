@@ -43,6 +43,16 @@ class SensitiveAPIProtectionTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, body)
 
+    def test_invoice_summary_is_tenant_scoped(self):
+        code = SOURCE.read_text(encoding="utf-8")
+        body = viewset_body(code, "ResidentInvoiceViewSet")
+        self.assertIn("permission_classes = [permissions.IsAuthenticated]", body)
+        self.assertIn("contract__contractors__user=user", body)
+        self.assertIn("contract__state=", body)
+        self.assertIn("contract__date__lte=today", body)
+        self.assertIn("contract__date_end__gte=today", body)
+        self.assertIn(".distinct()", body)
+
     def test_contracts_restricted_to_authenticated_current_contractors(self):
         code = SOURCE.read_text(encoding="utf-8")
         body = viewset_body(code, "ContractViewSet")
