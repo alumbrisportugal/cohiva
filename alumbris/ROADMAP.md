@@ -118,3 +118,13 @@
   those services are implemented, tested and homologated.
 - Timeline rejects repeated scalar date parameters and excessive category
   selections with HTTP 400 to avoid ambiguous filters.
+
+## Resident portal first usable HTML screen (experimental)
+- `/geno/resident/portal/` requires Django session authentication.
+- The pt-PT dashboard retrieves seven counters via `resident-overview/`.
+- Seven navigable record categories use `resident-portfolio/sections/`
+  and previous/next page controls; display uses DOM textContent rather
+  than injecting untrusted resident fields as HTML.
+- This is read-only: no payment, Portuguese fiscal receipt, document download
+  or resident writes. Browser accessibility and Synology staging deployment
+  still require homologation before commercial release.
