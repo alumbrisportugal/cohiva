@@ -2558,3 +2558,24 @@ class ResidentMaintenanceRequest(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ResidentMaintenanceComment(models.Model):
+    """Conversation message visible to the ticket owner and authorized staff."""
+
+    ticket = models.ForeignKey(
+        ResidentMaintenanceRequest, on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="alumbris_maintenance_comments",
+    )
+    message = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ("created_at", "pk")
+
+    def __str__(self):
+        return "Comentário do pedido %s" % self.ticket_id
