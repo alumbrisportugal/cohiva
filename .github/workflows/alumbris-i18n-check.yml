@@ -5,11 +5,14 @@ on:
       - 'pwa/src/i18n/**'
       - 'alumbris/check_pwa_i18n.py'
       - 'alumbris/tests/**'
+      - 'django/geno/tenancy_period.py'
       - '.github/workflows/alumbris-i18n-check.yml'
   pull_request:
     paths:
       - 'pwa/src/i18n/**'
       - 'alumbris/check_pwa_i18n.py'
+      - 'alumbris/tests/**'
+      - 'django/geno/tenancy_period.py'
       - '.github/workflows/alumbris-i18n-check.yml'
 jobs:
   verify:
@@ -23,5 +26,5 @@ jobs:
           python-version: '3.12'
       - name: Compare European Portuguese with English catalog
         run: python3 alumbris/check_pwa_i18n.py
-      - name: Run translation regression tests
+      - name: Run Alumbris regression tests
         run: python3 -m unittest discover -s alumbris/tests -p 'test_*.py'
