@@ -22,5 +22,6 @@ urlpatterns = [
     path("capabilities/", views.CapabilitiesView.as_view()),
     path("resident-overview/", views.ResidentOverviewView.as_view(), name="resident-overview"),
     path("resident-portfolio/", views.ResidentPortfolioView.as_view(), name="resident-portfolio"),
+    path("resident-timeline/", views.ResidentTimelineView.as_view(), name="resident-timeline"),
     path("resident-portfolio/sections/<slug:section>/", views.ResidentPortfolioSectionView.as_view(), name="resident-portfolio-section"),
 ]
