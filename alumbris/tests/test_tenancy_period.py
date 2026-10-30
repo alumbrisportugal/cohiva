@@ -2,12 +2,12 @@
 from datetime import date
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[2] / "django" / "geno" / "tenancy_period.py"
 spec = importlib.util.spec_from_file_location("alumbris_tenancy_period", SOURCE)
 mod = importlib.util.module_from_spec(spec)
-import sys
 sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
