@@ -15,6 +15,7 @@ class LegacyDocumentRouteTests(unittest.TestCase):
         end = code.index("\nclass ", start)
         block = code[start:end]
         self.assertIn('request.user.is_staff', block)
+        self.assertIn('request.user.has_perm("geno.add_document")', block)
         self.assertIn('request.user.has_perm("geno.regenerate_document")', block)
         self.assertIn('pk=obj_id, doctype=doctype_obj', block)
 
