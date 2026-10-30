@@ -166,3 +166,8 @@
 - The UI does not yet provide photo attachments, staff messaging, live updates,
   scheduling, or push/email notifications. Browser and Synology staging
   acceptance tests are still required.
+
+## Maintenance dashboard integration
+- Resident overview now returns `maintenance_requests`, counted through the same authenticated, tenant-scoped repair ticket queryset as its read-only list/detail API.
+- The resident HTML dashboard displays the ticket count; the separate repair form and ticket list remain available.
+- Other residents' repairs never contribute to the total. The new counter is not part of the seven original portfolio sections.
