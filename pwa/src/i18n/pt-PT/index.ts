@@ -212,7 +212,7 @@ export default {
       date: 'Data:',
       dateFrom: 'De',
       dateTo: 'até',
-      defaultCost: ' 0,00 €',
+      defaultCost: ' CHF 0.00',
       reason: {
         label: 'Motivo da reserva',
         placeholder: 'Descrição breve',
