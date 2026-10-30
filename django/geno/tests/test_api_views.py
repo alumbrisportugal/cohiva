@@ -388,6 +388,14 @@ class AlumbrisResidentContractAPITest(GenoAdminTestCase):
     def test_anonymous_denied(self):
         self.assertIn(self.call(None).status_code, (401, 403))
 
+    def test_resident_contract_response_hides_private_fields(self):
+        response = self.call(self.resident)
+        self.assertEqual(response.status_code, 200)
+        entry = next(row for row in response.data["results"] if row["id"] == self.contracts[0].id)
+        self.assertEqual(set(entry), {"id", "rental_units", "state", "date", "date_end"})
+        self.assertNotIn("contractors", entry)
+        self.assertNotIn("comment", entry)
+
     def test_resident_sees_only_current_own_contract(self):
         response = self.call(self.resident)
         self.assertEqual(response.status_code, 200)
@@ -465,6 +473,19 @@ class AlumbrisResidentRentalUnitAPITest(GenoAdminTestCase):
 
     def test_unauthenticated_denied(self):
         self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_resident_unit_response_hides_internal_fields(self):
+        response = self.call(self.resident)
+        self.assertEqual(response.status_code, 200)
+        entry = response.data["results"][0]
+        self.assertEqual(
+            set(entry),
+            {"id", "name", "label", "label_short", "rental_type",
+             "building", "floor", "area", "rooms"},
+        )
+        self.assertNotIn("adit_serial", entry)
+        self.assertNotIn("comment", entry)
+        self.assertNotIn("depot", entry)
 
     def test_resident_only_sees_own_units(self):
         result = self.call(self.resident)
