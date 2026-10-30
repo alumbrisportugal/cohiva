@@ -1129,8 +1129,8 @@ class AlumbrisResidentTimelineTest(GenoAdminTestCase):
             content_object=cls.contracts[0],
         )
 
-    def call(self, user):
-        request = APIRequestFactory().get("/api/v1/geno/resident-timeline/")
+    def call(self, user, params=None):
+        request = APIRequestFactory().get("/api/v1/geno/resident-timeline/", params or {})
         if user is not None:
             force_authenticate(request, user=user)
         return ResidentTimelineView.as_view()(request)
@@ -1160,3 +1160,30 @@ class AlumbrisResidentTimelineTest(GenoAdminTestCase):
         self.visible.save(update_fields=["resident_visible"])
         self.assertFalse(any(e["id"] == self.visible.pk and e["kind"] == "document"
                              for e in self.call(self.tenant).data["events"]))
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_timeline_document",))
+    def test_category_filter_does_not_expose_private_or_cross_tenant_events(self):
+        documents = self.call(self.tenant, {"kind": "document"})
+        self.assertEqual(documents.status_code, 200)
+        self.assertTrue(documents.data["events"])
+        self.assertTrue(all(item["kind"] == "document" for item in documents.data["events"]))
+        self.assertNotIn(self.private.pk, [item["id"] for item in documents.data["events"]])
+        self.assertEqual(self.call(self.stranger, {"kind": "document"}).data["events"], [])
+        invoices = self.call(self.tenant, {"kind": "invoice"})
+        self.assertEqual(invoices.status_code, 200)
+        self.assertTrue(all(item["kind"] == "invoice" for item in invoices.data["events"]))
+
+    def test_unknown_categories_rejected(self):
+        for kind in ("admin", "all", "", "../", "payments"):
+            self.assertEqual(self.call(self.tenant, {"kind": kind}).status_code, 400)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_timeline_document",))
+    def test_multiple_categories_filter_and_publish_revocation(self):
+        result = self.call(self.tenant, {"kind": ["document", "historical_document"]})
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(all(item["kind"] in ("document", "historical_document")
+                            for item in result.data["events"]))
+        self.visible.resident_visible = False
+        self.visible.save(update_fields=["resident_visible"])
+        result = self.call(self.tenant, {"kind": "document"})
+        self.assertEqual(result.data["events"], [])
