@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceViewSet
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Invoice, InvoiceCategory
 
@@ -507,3 +507,60 @@ class AlumbrisResidentRentalUnitAPITest(GenoAdminTestCase):
         contract.contractors.add(self.addresses[0])
         contract.rental_units.add(self.rentalunits[2])
         self.assertEqual(self.call(self.resident, self.rentalunits[2].id).status_code, 404)
+
+
+class AlumbrisResidentInvoiceAPITest(GenoAdminTestCase):
+    """HTTP-level isolation and projection of invoice summaries."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.resident = get_user_model().objects.create_user(username="alumbris_invoice_resident")
+        cls.stranger = get_user_model().objects.create_user(username="alumbris_invoice_stranger")
+        cls.addresses[0].user = cls.resident
+        cls.addresses[0].save(update_fields=["user"])
+        category = InvoiceCategory.objects.get(name="Mietzins wiederkehrend")
+        cls.own = Invoice.objects.create(
+            name="Rent", date=datetime.date.today(), amount=700,
+            contract=cls.contracts[0], invoice_category=category,
+        )
+        other_contract = Contract.objects.create(
+            date=datetime.date.today(), state="unterzeichnet",
+        )
+        other_contract.contractors.add(cls.addresses[2])
+        other_contract.rental_units.add(cls.rentalunits[2])
+        cls.foreign = Invoice.objects.create(
+            name="Another resident's rent", date=datetime.date.today(),
+            amount=900, contract=other_contract, invoice_category=category,
+        )
+
+    def call(self, user, pk=None):
+        view = ResidentInvoiceViewSet.as_view(
+            {"get": "retrieve" if pk is not None else "list"}
+        )
+        request = APIRequestFactory().get("/api/v1/geno/resident-invoice/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_other_invoice_not_visible(self):
+        result = self.call(self.resident)
+        self.assertEqual(result.status_code, 200)
+        ids = {row["id"] for row in result.data["results"]}
+        self.assertIn(self.own.id, ids)
+        self.assertNotIn(self.foreign.id, ids)
+        self.assertEqual(self.call(self.resident, self.foreign.id).status_code, 404)
+        self.assertEqual(self.call(self.stranger, self.own.id).status_code, 404)
+
+    def test_invoice_projection_excludes_accounting_fields(self):
+        response = self.call(self.resident, self.own.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.data),
+            {"id", "contract", "name", "date", "amount", "year", "month"},
+        )
+        self.assertNotIn("fin_transaction_ref", response.data)
