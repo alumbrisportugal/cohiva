@@ -1407,6 +1407,18 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
             ResidentOverviewView.as_view()(other_request).data["maintenance_requests"], 0
         )
 
+    def test_staff_can_read_but_cannot_submit_tickets(self):
+        staff = get_user_model().objects.create_user(
+            username="alumbris_repair_staff_create", is_staff=True,
+        )
+        response = self.call(staff, "post", {
+            "rental_unit": self.rentalunits[0].pk,
+            "title": "Pedido administrativo",
+            "description": "O equipamento está a precisar de reparação.",
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ResidentMaintenanceRequest.objects.count(), 0)
+
     def test_non_owner_cannot_update_existing_ticket(self):
         ticket = ResidentMaintenanceRequest.objects.create(
             resident=self.tenant, rental_unit=self.rentalunits[0],
