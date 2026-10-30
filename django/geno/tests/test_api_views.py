@@ -700,6 +700,11 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
     def test_anonymous_denied(self):
         self.assertIn(self.call(None).status_code, (401, 403))
 
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=())
+    def test_default_deny_exposes_no_document_metadata(self):
+        self.assertEqual(self.call(self.resident).data["count"], 0)
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
+
     def test_own_metadata_only(self):
         result = self.call(self.resident)
         self.assertEqual(result.status_code, 200)
@@ -760,6 +765,11 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
 
     def test_anonymous_denied(self):
         self.assertIn(self.call(None).status_code, (401, 403))
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=())
+    def test_default_deny_historical_metadata(self):
+        self.assertEqual(self.call(self.former).data["count"], 0)
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
 
     def test_former_can_list_own_metadata_not_successor(self):
         response = self.call(self.former)
