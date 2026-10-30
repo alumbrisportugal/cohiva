@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db.models import Q
@@ -4791,6 +4792,7 @@ def registration(request, registration_id=None):
 
 
 @login_required
+@ensure_csrf_cookie
 def resident_portal(request):
     """Read-only tenant portal shell, populated by authorized JSON APIs.
 
