@@ -28,6 +28,8 @@ from geno.serializers import (
     ContractSerializer,
     GroupSerializer,
     RentalUnitSerializer,
+    ResidentContractSerializer,
+    ResidentRentalUnitSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -65,6 +67,11 @@ class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = RentalUnit.objects.filter(active=True)
     serializer_class = RentalUnitSerializer
+
+    def get_serializer_class(self):
+        if self.request.user.is_staff:
+            return RentalUnitSerializer
+        return ResidentRentalUnitSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
@@ -93,6 +100,11 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = ContractSerializer
+
+    def get_serializer_class(self):
+        if self.request.user.is_staff:
+            return ContractSerializer
+        return ResidentContractSerializer
     permission_classes = [permissions.IsAuthenticated]
     queryset = Contract.objects.filter(
         state__in=("unterzeichnet", "gekuendigt"), main_contract=None
