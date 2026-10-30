@@ -128,3 +128,13 @@
 - This is read-only: no payment, Portuguese fiscal receipt, document download
   or resident writes. Browser accessibility and Synology staging deployment
   still require homologation before commercial release.
+
+## Resident portal CI regression and usability
+- The page authentication regression test explicitly logs out the base test
+  fixture, which automatically logs in the Django superuser.
+- Additional HTML checks verify safe `textContent` output, no `innerHTML`
+  insertion, same-origin API credentials, and keyboard-focusable pagination.
+- Field labels in the HTML resident record summaries are localized to pt-PT;
+  the JSON API retains its stable field names.
+- Commercial go-live remains blocked by browser acceptance testing, a secure
+  installation path, payment and Portuguese fiscal workflows.
