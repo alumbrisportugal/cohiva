@@ -6,7 +6,7 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.auth.models import Group, User
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 from django.http import FileResponse
 from rest_framework import permissions, viewsets
@@ -146,6 +146,33 @@ class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
             contract__state="unterzeichnet",
             contract__date__lte=today,
             contract__contractors__user=user,
+        ).distinct()
+
+
+class ResidentInvoiceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Historical invoice summaries restricted to their original contract parties.
+
+    Unlike the current invoice endpoint, this accepts ended signed/terminated
+    contracts. Each invoice must have a date within the old contract period.
+    It never grants access to documents belonging to a successor's contract.
+    """
+
+    queryset = Invoice.objects.filter(active=True, contract__isnull=False)
+    serializer_class = ResidentInvoiceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset.filter(contract__date_end__lt=timezone.localdate())
+        today = timezone.localdate()
+        return queryset.filter(
+            contract__state__in=("unterzeichnet", "gekuendigt"),
+            contract__contractors__user=user,
+            contract__date_end__lt=today,
+            date__gte=F("contract__date"),
+            date__lte=F("contract__date_end"),
         ).distinct()
 
 
