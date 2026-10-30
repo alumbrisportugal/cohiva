@@ -924,6 +924,33 @@ class AlumbrisResidentPortalOverviewTest(GenoAdminTestCase):
         self.old_contract.save(update_fields=["state"])
         self.assertEqual(self.history(self.former, self.old_contract.pk).status_code, 404)
 
+    def test_dashboard_updates_immediately_after_document_publication_and_revocation(self):
+        doctype = DocumentType.objects.create(name="alumbris_overview_safe_doc")
+        doc = Document.objects.create(
+            name="Tenant contract summary",
+            doctype=doctype,
+            resident_visible=False,
+            content_object=self.old_contract,
+            data='{"sensitive":"not returned"}',
+        )
+        with override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=(doctype.name,)):
+            self.assertEqual(self.overview(self.former).data["historical_documents"], 0)
+            doc.resident_visible = True
+            doc.save(update_fields=["resident_visible"])
+            self.assertEqual(self.overview(self.former).data["historical_documents"], 1)
+            self.assertEqual(self.overview(self.successor).data["historical_documents"], 0)
+            doc.resident_visible = False
+            doc.save(update_fields=["resident_visible"])
+            self.assertEqual(self.overview(self.former).data["historical_documents"], 0)
+
+    def test_dashboard_recomputes_counts_when_contract_is_void(self):
+        self.assertEqual(self.overview(self.former).data["historical_contracts"], 1)
+        self.old_contract.state = "ungueltig"
+        self.old_contract.save(update_fields=["state"])
+        result = self.overview(self.former)
+        self.assertEqual(result.data["historical_contracts"], 0)
+        self.assertEqual(result.data["historical_invoices"], 0)
+
     def test_dashboard_only_returns_counts_and_preserves_tenant_isolation(self):
         former = self.overview(self.former)
         successor = self.overview(self.successor)
