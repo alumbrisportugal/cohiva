@@ -761,7 +761,6 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
             date=datetime.date(2024, 1, 1),
             date_end=datetime.date(2025, 12, 31),
         )
-        Contract.objects.filter(pk=old.pk).update(active=True)
         old.contractors.add(cls.addresses[0])
         old.rental_units.add(cls.rentalunits[2])
         current = Contract.objects.create(
@@ -797,11 +796,11 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
         self.assertEqual(self.call(self.former).data["count"], 0)
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
 
-    def test_inactive_contract_hides_historical_document(self):
-        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
+    def test_ended_contract_remains_visible_to_its_former_tenant(self):
         contract = self.old_doc.content_object
-        Contract.objects.filter(pk=contract.pk).update(active=False)
-        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
+        self.assertLess(contract.date_end, datetime.date.today())
+        self.assertFalse(Contract.objects.get(pk=contract.pk).active)
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
 
     def test_revocation_immediately_removes_historical_document(self):
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
