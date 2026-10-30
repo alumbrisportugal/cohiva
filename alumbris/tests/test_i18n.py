@@ -22,6 +22,12 @@ class TranslationCatalogTests(unittest.TestCase):
         self.assertEqual(en_keys, pt_keys)
         self.assertEqual(en_vars, pt_vars)
 
+    def test_swiss_qr_price_not_mislabelled_as_euro(self):
+        """Until payment logic is adapted, the Swiss fallback must not claim EUR."""
+        content = checker.TARGET.read_text(encoding="utf-8")
+        self.assertIn("defaultCost: ' CHF 0.00'", content)
+        self.assertNotIn("defaultCost: ' 0,00 €'", content)
+
     def test_detects_missing_keys_and_changed_placeholders(self):
         with tempfile.TemporaryDirectory() as tmp:
             first = Path(tmp) / "first.ts"
