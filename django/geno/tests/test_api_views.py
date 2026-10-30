@@ -968,7 +968,7 @@ class AlumbrisResidentPortalOverviewTest(GenoAdminTestCase):
             set(former.data),
             {"current_contracts", "historical_contracts", "current_units",
              "current_invoices", "historical_invoices",
-             "current_documents", "historical_documents"},
+             "current_documents", "historical_documents", "maintenance_requests"},
         )
         self.assertNotIn("amount", str(former.data))
         self.assertNotIn("data", str(former.data))
@@ -1388,6 +1388,24 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(ResidentMaintenanceRequest.objects.filter(pk=ticket.pk).exists())
+
+    def test_dashboard_maintenance_count_is_owner_scoped(self):
+        request = APIRequestFactory().get("/api/v1/geno/resident-overview/")
+        force_authenticate(request, user=self.tenant)
+        before = ResidentOverviewView.as_view()(request)
+        self.assertEqual(before.data["maintenance_requests"], 0)
+        ResidentMaintenanceRequest.objects.create(
+            resident=self.tenant, rental_unit=self.rentalunits[0],
+            title="Alarme avariado",
+            description="O alarme da entrada está continuamente a disparar.",
+        )
+        after = ResidentOverviewView.as_view()(request)
+        self.assertEqual(after.data["maintenance_requests"], 1)
+        other_request = APIRequestFactory().get("/api/v1/geno/resident-overview/")
+        force_authenticate(other_request, user=self.other)
+        self.assertEqual(
+            ResidentOverviewView.as_view()(other_request).data["maintenance_requests"], 0
+        )
 
     def test_non_owner_cannot_update_existing_ticket(self):
         ticket = ResidentMaintenanceRequest.objects.create(
