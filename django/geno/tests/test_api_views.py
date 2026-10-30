@@ -344,3 +344,64 @@ class ContractViewSetTest(GenoAdminTestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.render().content)
         self.assertEqual(data["count"], 1)
+
+
+class AlumbrisResidentContractAPITest(GenoAdminTestCase):
+    """Database-backed permission tests for list and retrieve endpoints."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.resident = get_user_model().objects.create_user(
+            username="alumbris_resident", password="not-a-real-secret"
+        )
+        cls.stranger = get_user_model().objects.create_user(
+            username="alumbris_stranger", password="not-a-real-secret"
+        )
+        cls.addresses[0].user = cls.resident
+        cls.addresses[0].save(update_fields=["user"])
+        cls.future_contract = Contract.objects.create(
+            state="unterzeichnet",
+            date=datetime.date.today() + datetime.timedelta(days=10),
+        )
+        cls.future_contract.contractors.add(cls.addresses[0])
+        cls.future_contract.rental_units.add(cls.rentalunits[2])
+        cls.elsewhere_contract = Contract.objects.create(
+            state="unterzeichnet",
+            date=datetime.date.today() - datetime.timedelta(days=10),
+        )
+        cls.elsewhere_contract.contractors.add(cls.addresses[2])
+        cls.elsewhere_contract.rental_units.add(cls.rentalunits[3])
+
+    def call(self, user, detail_id=None):
+        factory = APIRequestFactory()
+        action = {"get": "retrieve"} if detail_id is not None else {"get": "list"}
+        view = ContractViewSet.as_view(action)
+        request = factory.get("/api/v1/geno/contract/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        if detail_id is None:
+            return view(request)
+        return view(request, pk=detail_id)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_resident_sees_only_current_own_contract(self):
+        response = self.call(self.resident)
+        self.assertEqual(response.status_code, 200)
+        ids = {entry["id"] for entry in response.data["results"]}
+        self.assertIn(self.contracts[0].id, ids)
+        self.assertNotIn(self.future_contract.id, ids)
+        self.assertNotIn(self.elsewhere_contract.id, ids)
+
+    def test_resident_cannot_retrieve_other_or_future_contract(self):
+        self.assertEqual(self.call(self.resident, self.elsewhere_contract.id).status_code, 404)
+        self.assertEqual(self.call(self.resident, self.future_contract.id).status_code, 404)
+
+    def test_stranger_has_no_contracts(self):
+        response = self.call(self.stranger)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(self.call(self.stranger, self.contracts[0].id).status_code, 404)
