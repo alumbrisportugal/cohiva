@@ -49,3 +49,5 @@
 - An allowlisted type still needs a privacy review: a contract can contain
   documents intended only for staff. Production requires document-level
   visibility classification, not merely a type allowlist.
+
+- Per-document `Document.resident_visible` (migration 0033) is now required in addition to a type allowlist and current/historical contract ownership. Defaults to false for existing and new documents. Production still needs approval workflow and secure file delivery.
