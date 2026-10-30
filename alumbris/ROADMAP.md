@@ -138,3 +138,16 @@
   the JSON API retains its stable field names.
 - Commercial go-live remains blocked by browser acceptance testing, a secure
   installation path, payment and Portuguese fiscal workflows.
+
+## Resident maintenance requests (experimental)
+- `GET /api/v1/geno/resident-maintenance/`: each authenticated resident
+  lists only tickets they created; staff have read access for triage.
+- `POST /api/v1/geno/resident-maintenance/`: requires `rental_unit`,
+  `title` (up to 140 characters) and `description` (10–3000 characters).
+  Unit ownership is checked against the active rental-unit authorization.
+- `GET /api/v1/geno/resident-maintenance/<id>/`: ownership restricted;
+  resident name, status, and creation date returned without other tenants.
+- Status begins at `open` and cannot be controlled by resident input.
+  Existing records cannot be patched/deleted from this API.
+- No staff triage interface, attachments, email alerts, SLA, or completion
+  workflow exists yet. Migration 0034 creates the tickets table.
