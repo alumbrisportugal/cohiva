@@ -211,6 +211,56 @@ class ResidentPortfolioView(APIView):
         return Response(payload)
 
 
+class ResidentPortfolioSectionView(APIView):
+    """Paginated read-only sections backed by the same tenant querysets.
+
+    Explicit section names prevent arbitrary model access, and the page cap
+    protects the endpoint from accidental unbounded database responses.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    PAGE_SIZE = 25
+    MAX_PAGE = 10000
+
+    def get(self, request, section):
+        sections = {
+            "current-contracts": (ContractViewSet, ResidentContractSerializer),
+            "historical-contracts": (ResidentContractHistoryViewSet, ResidentContractSerializer),
+            "current-units": (RentalUnitViewSet, ResidentRentalUnitSerializer),
+            "current-invoices": (ResidentInvoiceViewSet, ResidentInvoiceSerializer),
+            "historical-invoices": (ResidentInvoiceHistoryViewSet, ResidentInvoiceSerializer),
+            "current-documents": (ResidentContractDocumentViewSet, ResidentContractDocumentSerializer),
+            "historical-documents": (ResidentContractDocumentHistoryViewSet, ResidentContractDocumentSerializer),
+        }
+        if section not in sections:
+            from django.http import Http404
+
+            raise Http404
+        raw_page = request.query_params.get("page", "1")
+        if not raw_page.isdecimal() or len(raw_page) > 5:
+            raise ValidationError({"page": "Expected a positive integer."})
+        page = int(raw_page)
+        if not 1 <= page <= self.MAX_PAGE:
+            raise ValidationError({"page": "Page is out of range."})
+        viewset_class, serializer_class = sections[section]
+        viewset = viewset_class()
+        viewset.request = request
+        queryset = viewset.get_queryset().order_by("pk")
+        total = queryset.count()
+        offset = (page - 1) * self.PAGE_SIZE
+        items = serializer_class(
+            queryset[offset: offset + self.PAGE_SIZE], many=True
+        ).data
+        return Response({
+            "section": section,
+            "page": page,
+            "page_size": self.PAGE_SIZE,
+            "total": total,
+            "has_next": offset + self.PAGE_SIZE < total,
+            "items": items,
+        })
+
+
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
 
