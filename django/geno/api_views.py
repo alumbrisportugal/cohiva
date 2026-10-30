@@ -391,7 +391,7 @@ class ResidentMaintenanceRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = ResidentMaintenanceRequest.objects.select_related("rental_unit")
-        if self.request.user.is_staff:
+        if self.request.user.is_staff and self.request.user.has_perm("geno.view_residentmaintenancerequest"):
             return queryset
         return queryset.filter(resident=self.request.user)
 
