@@ -76,7 +76,10 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
         main_contract=None
     )
     serializer_class = ContractSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Contracts contain sensitive personal and financial information. Until
+    # object-level tenancy access is implemented and tested, only staff may list
+    # or retrieve them. IsAdminUser additionally requires authentication.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class Akonto(APIView):
