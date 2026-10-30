@@ -50,6 +50,7 @@ button[aria-pressed=true]{background:#17324b;color:white}button:disabled{opacity
 <p id="maintenance-feedback" role="status" aria-live="polite"></p>
 <h2>Os meus pedidos</h2>
 <div id="maintenance-list"></div>
+<div id="maintenance-conversation" aria-live="polite"></div>
 </section>
 </main>
 <script>
@@ -134,9 +135,38 @@ async function loadMaintenance(){
  for(const ticket of tickets.results || tickets){
   const row=element("div",undefined,"entry");
   row.append(element("strong",ticket.title),element("div",ticket.status+" · "+new Date(ticket.created_at).toLocaleDateString("pt-PT"),"muted"));
-  target.append(row);
+  const button=element("button","Ver conversa");button.type="button";
+  button.addEventListener("click",()=>loadConversation(ticket.id));
+  row.append(button);target.append(row);
  }
  if(!target.children.length)target.append(element("p","Ainda não existem pedidos.","muted"));
+}
+async function loadConversation(ticketId){
+ const area=byId("maintenance-conversation");area.replaceChildren();
+ const data=await json("resident-maintenance-comments/");
+ const comments=(data.results || data).filter(comment=>comment.ticket===ticketId);
+ area.append(element("h3","Conversa do pedido #"+ticketId));
+ for(const comment of comments){
+  const row=element("div",undefined,"entry");
+  row.append(element("strong","Mensagem"),element("p",comment.message));
+  area.append(row);
+ }
+ if(!comments.length)area.append(element("p","Ainda não existem mensagens.","muted"));
+ const form=element("form");
+ const label=element("label","Nova mensagem");label.htmlFor="reply-message-"+ticketId;
+ const textarea=element("textarea");textarea.id=label.htmlFor;textarea.required=true;textarea.maxLength=2000;textarea.minLength=2;
+ const submit=element("button","Enviar mensagem");submit.type="submit";
+ form.append(label,textarea,submit);area.append(form);
+ form.addEventListener("submit",async event=>{
+  event.preventDefault();submit.disabled=true;
+  try{
+   const cookie=document.cookie.split("; ").find(value=>value.startsWith("csrftoken="));
+   const token=cookie?decodeURIComponent(cookie.slice(10)):"";
+   const response=await fetch(base+"resident-maintenance-comments/",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-CSRFToken":token,"Accept":"application/json"},body:JSON.stringify({ticket:ticketId,message:textarea.value})});
+   if(!response.ok)throw new Error("Não foi possível enviar a mensagem.");
+   await loadConversation(ticketId);
+  }catch(err){area.append(element("p",err.message,"muted"));submit.disabled=false;}
+ });
 }
 byId("maintenance-form").addEventListener("submit",async event=>{
  event.preventDefault();
