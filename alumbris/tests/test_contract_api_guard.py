@@ -43,6 +43,25 @@ class SensitiveAPIProtectionTests(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, body)
 
+    def test_document_metadata_is_tenant_scoped_and_never_exposes_data(self):
+        code = SOURCE.read_text(encoding="utf-8")
+        body = viewset_body(code, "ResidentContractDocumentViewSet")
+        for required in (
+            "permission_classes = [permissions.IsAuthenticated]",
+            "get_for_model(Contract)",
+            "contractors__user=user",
+            'state="unterzeichnet"',
+            "date__lte=today",
+            "object_id__in=",
+        ):
+            self.assertIn(required, body)
+        serializer_source = (
+            Path(__file__).resolve().parents[2] / "django" / "geno" / "serializers.py"
+        ).read_text(encoding="utf-8")
+        serializer_block = serializer_source.split("class ResidentContractDocumentSerializer(")[1]
+        self.assertNotIn('"data"', serializer_block)
+        self.assertNotIn('"template"', serializer_block)
+
     def test_invoice_summary_is_tenant_scoped(self):
         code = SOURCE.read_text(encoding="utf-8")
         body = viewset_body(code, "ResidentInvoiceViewSet")
