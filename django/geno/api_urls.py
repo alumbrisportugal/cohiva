@@ -8,6 +8,7 @@ from . import api_views as views
 router = routers.DefaultRouter()
 router.register(r"rentalunit", views.RentalUnitViewSet)
 router.register(r"contract", views.ContractViewSet)
+router.register(r"resident-invoice", views.ResidentInvoiceViewSet, basename="resident-invoice")
 
 urlpatterns = [
     ## API endpoints
