@@ -94,7 +94,7 @@ async function refreshOverview(){
  ["current_contracts","Contratos atuais"],["historical_contracts","Contratos históricos"],
  ["current_units","Frações"],["current_invoices","Faturas atuais"],
  ["historical_invoices","Faturas antigas"],["current_documents","Documentos"],
- ["historical_documents","Arquivo"]];
+ ["historical_documents","Arquivo"],["maintenance_requests","Pedidos de manutenção"]];
  const target=byId("overview");target.replaceChildren();
  for(const [key,label] of labels){const card=element("div",undefined,"card");
  card.append(element("strong",data[key] ?? 0),element("span",label));target.append(card);}
