@@ -75,13 +75,11 @@ class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
         today = timezone.localdate()
         return (
             queryset.filter(
+                Q(rentalunit_contracts__date_end__isnull=True)
+                | Q(rentalunit_contracts__date_end__gte=today),
                 rentalunit_contracts__state="unterzeichnet",
                 rentalunit_contracts__date__lte=today,
                 rentalunit_contracts__contractors__user=user,
-            )
-            .filter(
-                Q(rentalunit_contracts__date_end__isnull=True)
-                | Q(rentalunit_contracts__date_end__gte=today)
             )
             .distinct()
         )
