@@ -84,3 +84,13 @@
 - Each section delegates access filtering and response projection to the
   existing tenant-scoped viewset and resident serializer.
 - Not a file download endpoint, payment provider, or legal tax receipt.
+
+## Resident activity timeline (development branch)
+- `GET /api/v1/geno/resident-timeline/`: at most 30 dated events from
+  currently or historically authorized invoices and published contract
+  document metadata. Entries contain only `kind`, `id`, `title`, `date`.
+- Uses the same tenant-ownership, document-visibility and type allowlist
+  enforcement as the existing seven portfolio sections. Revoking visibility
+  removes documents from the timeline immediately.
+- Not an accounting ledger, evidence of payment, official receipt, or
+  downloadable document archive. All changes remain in PR draft.
