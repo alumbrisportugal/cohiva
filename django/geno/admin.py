@@ -48,6 +48,7 @@ from geno.models import (
     RegistrationEvent,
     RegistrationSlot,
     RentalUnit,
+    ResidentMaintenanceRequest,
     Share,
     ShareType,
     Tenant,
@@ -2109,3 +2110,25 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 @admin.register(Group)
 class GroupAdmin(BaseGroupAdmin, ModelAdmin):
     pass
+
+
+@admin.register(ResidentMaintenanceRequest)
+class ResidentMaintenanceRequestAdmin(ModelAdmin):
+    """Staff triage with immutable resident submission and unit ownership."""
+
+    list_display = ("id", "title", "resident", "rental_unit", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("title", "description", "resident__username", "rental_unit__name")
+    readonly_fields = (
+        "resident", "rental_unit", "title", "description", "created_at", "updated_at",
+    )
+    fields = (
+        "resident", "rental_unit", "title", "description",
+        "status", "created_at", "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
