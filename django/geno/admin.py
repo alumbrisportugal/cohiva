@@ -2127,6 +2127,17 @@ class ResidentMaintenanceRequestAdmin(ModelAdmin):
         "status", "created_at", "updated_at",
     )
 
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser or (
+            request.user.is_staff and request.user.has_perm("geno.change_residentmaintenancerequest")
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not self.has_change_permission(request, obj):
+            fields.append("status")
+        return fields
+
     def has_add_permission(self, request):
         return False
 
