@@ -188,6 +188,7 @@ class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = Document.objects.filter(
             content_type=ContentType.objects.get_for_model(Contract),
             doctype__name__in=getattr(settings, "ALUMBRIS_RESIDENT_DOCUMENT_TYPES", ()),
+            resident_visible=True,
         )
         user = self.request.user
         if user.is_staff:
@@ -217,6 +218,7 @@ class ResidentContractDocumentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = Document.objects.filter(
             content_type=ContentType.objects.get_for_model(Contract),
             doctype__name__in=getattr(settings, "ALUMBRIS_RESIDENT_DOCUMENT_TYPES", ()),
+            resident_visible=True,
         )
         user = self.request.user
         today = timezone.localdate()
