@@ -37,3 +37,15 @@
 - Unit, HTTP authorization, integration, acceptance, restore and rollback tests.
 - Measured CPU, RAM and IO performance on DS220+; written release report.
 - No commercial-release label without test evidence.
+
+## Document metadata security (current branch)
+- `resident-contract-document` and `resident-contract-document-history` are metadata-only routes.
+- Resident-visible document types are explicitly allowlisted in Django setting
+  `ALUMBRIS_RESIDENT_DOCUMENT_TYPES`. Default empty means no titles or metadata
+  are exposed to residents before a deliberate administrator configuration.
+- Example *test-only* value: `("alumbris_test_contract_doc",)`.
+- File downloads remain deliberately unavailable to residents; the existing
+  admin-generation endpoint is not a safe tenant download endpoint.
+- An allowlisted type still needs a privacy review: a contract can contain
+  documents intended only for staff. Production requires document-level
+  visibility classification, not merely a type allowlist.
