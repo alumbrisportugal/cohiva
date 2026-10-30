@@ -5,6 +5,7 @@ from datetime import date, datetime
 
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Group, User
 from django.db.models import F, Q, Sum
 from django.utils import timezone
@@ -23,7 +24,7 @@ from geno.billing import (
     get_reference_nr,
     render_qrbill,
 )
-from geno.models import Address, Building, Contract, Invoice, InvoiceCategory, RentalUnit
+from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit
 from geno.serializers import (
     ContractSerializer,
     GroupSerializer,
@@ -31,6 +32,7 @@ from geno.serializers import (
     ResidentContractSerializer,
     ResidentRentalUnitSerializer,
     ResidentInvoiceSerializer,
+    ResidentContractDocumentSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -174,6 +176,30 @@ class ResidentInvoiceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             date__gte=F("contract__date"),
             date__lte=F("contract__date_end"),
         ).distinct()
+
+
+class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
+    """Return contract document metadata, never raw document context or files."""
+
+    serializer_class = ResidentContractDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Document.objects.filter(
+            content_type=ContentType.objects.get_for_model(Contract)
+        )
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return queryset.filter(
+            object_id__in=Contract.objects.filter(
+                Q(date_end__isnull=True) | Q(date_end__gte=today),
+                state="unterzeichnet",
+                date__lte=today,
+                contractors__user=user,
+            ).values("pk")
+        )
 
 
 class Akonto(APIView):
