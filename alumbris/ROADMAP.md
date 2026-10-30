@@ -51,3 +51,12 @@
   visibility classification, not merely a type allowlist.
 
 - Per-document `Document.resident_visible` (migration 0033) is now required in addition to a type allowlist and current/historical contract ownership. Defaults to false for existing and new documents. Production still needs approval workflow and secure file delivery.
+
+## Resident portal read-only overview (development branch)
+- `GET /api/v1/geno/resident-overview/`: seven counters derived directly
+  from the same server-side filtered querysets used by resident list/detail APIs.
+  No contract notes, other tenants, bank details, payment references, or amounts.
+- `GET /api/v1/geno/resident-contract-history/`: former contract headers
+  (original parties only, ended signed/terminated state, no void contracts).
+- These views are not a Portuguese tax-compliant payment/receipt module.
+  The portal remains read-only; full user experience and privacy review pending.
