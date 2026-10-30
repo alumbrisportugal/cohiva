@@ -1130,14 +1130,22 @@ class DocumentAdmin(ObjectActionsMixin, GenoBaseAdmin):
     list_filter = ["resident_visible", "doctype", "ts_created", "ts_modified", "content_type"]
     autocomplete_fields = ["doctype"]
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            fields.append("resident_visible")
+        return fields
+
     def save_model(self, request, obj, form, change):
-        # Publishing document metadata is an explicit administrative action.
-        # It must remain limited to superusers until a dedicated approval role
-        # and privacy review workflow are implemented.
-        if obj.resident_visible and not request.user.is_superuser:
-            raise forms.ValidationError(
-                "Only a superuser may mark a document as resident-visible."
-            )
+        # Defence in depth: reject forged requests that bypass the admin form.
+        if not request.user.is_superuser:
+            previous = Document.objects.filter(pk=obj.pk).values_list(
+                "resident_visible", flat=True
+            ).first() if obj.pk else False
+            if obj.resident_visible != previous:
+                from django.core.exceptions import PermissionDenied
+
+                raise PermissionDenied("Only superusers may change document visibility")
         super().save_model(request, obj, form, change)
 
 
