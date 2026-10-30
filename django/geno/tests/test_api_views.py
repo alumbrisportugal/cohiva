@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Invoice, InvoiceCategory
 
@@ -441,3 +441,48 @@ class AlumbrisResidentContractAPITest(GenoAdminTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)
         self.assertEqual(self.call(self.stranger, self.contracts[0].id).status_code, 404)
+
+
+class AlumbrisResidentRentalUnitAPITest(GenoAdminTestCase):
+    """Real DRF list/detail checks against contract-linked rental units."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.resident = get_user_model().objects.create_user(username="alumbris_unit_resident")
+        cls.other = get_user_model().objects.create_user(username="alumbris_unit_other")
+        cls.addresses[0].user = cls.resident
+        cls.addresses[0].save(update_fields=["user"])
+
+    def call(self, user, pk=None):
+        factory = APIRequestFactory()
+        view = RentalUnitViewSet.as_view({"get": "retrieve" if pk is not None else "list"})
+        request = factory.get("/api/v1/geno/rentalunit/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_unauthenticated_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_resident_only_sees_own_units(self):
+        result = self.call(self.resident)
+        self.assertEqual(result.status_code, 200)
+        ids = {entry["id"] for entry in result.data["results"]}
+        self.assertEqual(ids, {unit.id for unit in self.rentalunits[:2]})
+        self.assertEqual(self.call(self.resident, self.rentalunits[2].id).status_code, 404)
+
+    def test_unrelated_user_denied(self):
+        result = self.call(self.other)
+        self.assertEqual(result.data["count"], 0)
+        self.assertEqual(self.call(self.other, self.rentalunits[0].id).status_code, 404)
+
+    def test_future_contract_does_not_grant_unit_access(self):
+        contract = Contract.objects.create(
+            state="unterzeichnet",
+            date=datetime.date.today() + datetime.timedelta(days=30),
+        )
+        contract.contractors.add(self.addresses[0])
+        contract.rental_units.add(self.rentalunits[2])
+        self.assertEqual(self.call(self.resident, self.rentalunits[2].id).status_code, 404)
