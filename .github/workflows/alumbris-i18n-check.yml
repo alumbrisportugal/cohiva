@@ -8,6 +8,7 @@ on:
       - 'django/geno/tenancy_period.py'
       - 'django/geno/tenancy_access.py'
       - 'django/geno/api_views.py'
+      - 'django/geno/views.py'
       - '.github/workflows/alumbris-i18n-check.yml'
   pull_request:
     paths:
@@ -17,6 +18,7 @@ on:
       - 'django/geno/tenancy_period.py'
       - 'django/geno/tenancy_access.py'
       - 'django/geno/api_views.py'
+      - 'django/geno/views.py'
       - '.github/workflows/alumbris-i18n-check.yml'
 jobs:
   verify:
