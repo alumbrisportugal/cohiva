@@ -202,6 +202,38 @@ class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
+class ResidentContractDocumentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Historical document metadata only, limited to original ended contracts.
+
+    This does not grant file download access. Documents created after the
+    contract ended are excluded conservatively pending retention-policy review.
+    """
+
+    serializer_class = ResidentContractDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Document.objects.filter(
+            content_type=ContentType.objects.get_for_model(Contract)
+        )
+        user = self.request.user
+        today = timezone.localdate()
+        if user.is_staff:
+            return queryset.filter(
+                object_id__in=Contract.objects.filter(date_end__lt=today).values("pk")
+            )
+        # GenericForeignKey prevents a direct join to contract dates. Restrict
+        # to the original contracting party and ended contracts server-side.
+        # Historical downloads require a separate, stricter authorization path.
+        return queryset.filter(
+            object_id__in=Contract.objects.filter(
+                state__in=("unterzeichnet", "gekuendigt"),
+                date_end__lt=today,
+                contractors__user=user,
+            ).values("pk")
+        )
+
+
 class Akonto(APIView):
     """
     Get paid akonto amount for contract and billing period.
