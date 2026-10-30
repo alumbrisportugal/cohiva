@@ -19,7 +19,7 @@ This document records direct source inspection, not a successful deployment.
 4. Existing role choices operate at a community level; apartment-specific tenancy-level authorization has not been demonstrated.
 5. Development Compose publishes MariaDB/Redis ports and ships known test credentials; must never be reused as production Compose.
 6. Existing OAuth/SAML capabilities could support one login for services, but need end-to-end permission testing.
-7. Localization must not silently substitute EUR labels for Swiss-QR payment logic; payments must be disabled or implemented/validated for Portugal.
+7. Portugal also supports QR-code payments. Do not discard the QR user experience: Swiss QR-bill and Portuguese rails are different schemes. Reuse QR presentation and payment lifecycle only where compatible, implementing provider-specific adapters and verifying receipts/settlement through official provider APIs. EUR labels alone do not convert Swiss payment instructions into Portuguese ones.
 
 ## Acceptance gates
 
