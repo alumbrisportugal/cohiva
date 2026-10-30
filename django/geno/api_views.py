@@ -24,7 +24,7 @@ from geno.billing import (
     get_reference_nr,
     render_qrbill,
 )
-from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit
+from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit, ResidentMaintenanceRequest
 from geno.serializers import (
     ContractSerializer,
     GroupSerializer,
@@ -33,6 +33,7 @@ from geno.serializers import (
     ResidentRentalUnitSerializer,
     ResidentInvoiceSerializer,
     ResidentContractDocumentSerializer,
+    ResidentMaintenanceRequestSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -373,6 +374,32 @@ class ResidentCapabilitiesView(APIView):
             "online_payments": False,
             "official_pt_tax_receipts": False,
         })
+
+
+class ResidentMaintenanceRequestViewSet(viewsets.ModelViewSet):
+    """Tenants create and read their own tickets; staff may triage.
+
+    Residents cannot assign another resident, change ticket status, update
+    existing requests or choose a rental unit without a current lease.
+    """
+
+    serializer_class = ResidentMaintenanceRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        queryset = ResidentMaintenanceRequest.objects.select_related("rental_unit")
+        if self.request.user.is_staff:
+            return queryset
+        return queryset.filter(resident=self.request.user)
+
+    def perform_create(self, serializer):
+        unit = serializer.validated_data["rental_unit"]
+        current_units = RentalUnitViewSet()
+        current_units.request = self.request
+        if not current_units.get_queryset().filter(pk=unit.pk).exists():
+            raise ValidationError({"rental_unit": "A fração não está associada a um contrato atual."})
+        serializer.save(resident=self.request.user)
 
 
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
