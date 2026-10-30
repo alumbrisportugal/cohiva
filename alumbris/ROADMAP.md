@@ -171,3 +171,12 @@
 - Resident overview now returns `maintenance_requests`, counted through the same authenticated, tenant-scoped repair ticket queryset as its read-only list/detail API.
 - The resident HTML dashboard displays the ticket count; the separate repair form and ticket list remain available.
 - Other residents' repairs never contribute to the total. The new counter is not part of the seven original portfolio sections.
+
+## Maintenance administrative permission hardening
+- Staff change access in the Django maintenance admin requires the explicit
+  `geno.change_residentmaintenancerequest` permission (superusers excepted).
+- The original resident, unit, subject and problem description remain locked
+  on admin edit; administrators cannot add or delete tickets there.
+- Staff may list/view tickets via the repair API but cannot create tickets
+  through the resident submission endpoint. New permission and negative
+  tests cover these boundaries.
