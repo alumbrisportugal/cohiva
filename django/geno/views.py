@@ -4788,3 +4788,14 @@ def registration(request, registration_id=None):
     template_data = {}
     template_data["forms"] = process_registration_forms(request, selector=registration_id)
     return render(request, "website/registration_form.html", template_data)
+
+
+@login_required
+def resident_portal(request):
+    """Read-only tenant portal shell, populated by authorized JSON APIs.
+
+    Client code never receives administrative models or secret document data.
+    """
+    return render(request, "geno/resident_portal.html", {
+        "portal_api_base": "/api/v1/geno/",
+    })
