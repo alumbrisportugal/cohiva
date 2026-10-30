@@ -91,3 +91,24 @@ class ContractSerializer(serializers.ModelSerializer):
         ]
         ## exclude unused fields: 'children', 'children_old', 'import_id',
         ## 'links', 'backlinks'
+
+
+class ResidentRentalUnitSerializer(serializers.ModelSerializer):
+    """Minimal resident-facing fields; no intercom IDs or admin comments."""
+
+    class Meta:
+        model = RentalUnit
+        fields = [
+            "id", "name", "label", "label_short", "rental_type",
+            "building", "floor", "area", "rooms",
+        ]
+
+
+class ResidentContractSerializer(serializers.ModelSerializer):
+    """Conservative projection: no unrelated party IDs or financial notes."""
+
+    class Meta:
+        model = Contract
+        fields = [
+            "id", "rental_units", "state", "date", "date_end",
+        ]
