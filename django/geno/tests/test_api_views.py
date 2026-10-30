@@ -1198,6 +1198,15 @@ class AlumbrisResidentTimelineTest(GenoAdminTestCase):
         self.assertEqual(old.status_code, 200)
         self.assertEqual(old.data["events"], [])
 
+    def test_ambiguous_or_excessive_filter_parameters_rejected(self):
+        cases = (
+            {"from_date": ["2025-01-01", "2026-01-01"]},
+            {"to_date": ["2025-01-01", "2026-01-01"]},
+            {"kind": ["invoice", "invoice", "invoice", "invoice", "invoice"]},
+        )
+        for params in cases:
+            self.assertEqual(self.call(self.tenant, params).status_code, 400)
+
     def test_invalid_date_range_inputs_rejected(self):
         for params in (
             {"from_date": "2020-99-99"},
