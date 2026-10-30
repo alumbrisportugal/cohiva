@@ -151,3 +151,7 @@
   Existing records cannot be patched/deleted from this API.
 - No staff triage interface, attachments, email alerts, SLA, or completion
   workflow exists yet. Migration 0034 creates the tickets table.
+
+- Django admin staff triage now lists/searches requests, permits status
+  updates, and locks resident-submitted identity, unit and description.
+  Admin cannot add or delete requests. Staff read access via API is tested.
