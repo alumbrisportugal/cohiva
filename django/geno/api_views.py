@@ -261,6 +261,40 @@ class ResidentPortfolioSectionView(APIView):
         })
 
 
+class ResidentTimelineView(APIView):
+    """Recent resident events from already-authorized records only.
+
+    The timeline is a bounded read-only view, not a payment ledger or
+    official Portuguese fiscal history. No unapproved documents are exposed.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    MAX_EVENTS = 30
+
+    def get(self, request):
+        sources = (
+            ("invoice", ResidentInvoiceViewSet, "date", "name"),
+            ("historical_invoice", ResidentInvoiceHistoryViewSet, "date", "name"),
+            ("document", ResidentContractDocumentViewSet, "ts_created", "name"),
+            ("historical_document", ResidentContractDocumentHistoryViewSet, "ts_created", "name"),
+        )
+        events = []
+        for kind, viewset_class, date_field, title_field in sources:
+            viewset = viewset_class()
+            viewset.request = request
+            queryset = viewset.get_queryset().order_by("-" + date_field, "-pk")
+            for item in queryset[:self.MAX_EVENTS]:
+                timestamp = getattr(item, date_field)
+                events.append({
+                    "kind": kind,
+                    "id": item.pk,
+                    "title": getattr(item, title_field),
+                    "date": timestamp.date().isoformat() if isinstance(timestamp, datetime) else timestamp.isoformat(),
+                })
+        events.sort(key=lambda item: (item["date"], item["kind"], item["id"]), reverse=True)
+        return Response({"events": events[:self.MAX_EVENTS], "limit": self.MAX_EVENTS})
+
+
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
 
