@@ -6,6 +6,7 @@ on:
       - 'alumbris/check_pwa_i18n.py'
       - 'alumbris/tests/**'
       - 'django/geno/tenancy_period.py'
+      - 'django/geno/tenancy_access.py'
       - '.github/workflows/alumbris-i18n-check.yml'
   pull_request:
     paths:
@@ -13,6 +14,7 @@ on:
       - 'alumbris/check_pwa_i18n.py'
       - 'alumbris/tests/**'
       - 'django/geno/tenancy_period.py'
+      - 'django/geno/tenancy_access.py'
       - '.github/workflows/alumbris-i18n-check.yml'
 jobs:
   verify:
