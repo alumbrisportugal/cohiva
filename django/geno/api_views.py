@@ -61,14 +61,30 @@ class GroupViewSet(viewsets.ModelViewSet):
 
 
 class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint that allows active rental units to be viewed.
-    """
+    """Active rental units visible to staff or their current signed occupants."""
 
     queryset = RentalUnit.objects.filter(active=True)
     serializer_class = RentalUnitSerializer
-    # Restricted until fine-grained object-level permissions are verified.
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return (
+            queryset.filter(
+                rentalunit_contracts__state="unterzeichnet",
+                rentalunit_contracts__date__lte=today,
+                rentalunit_contracts__contractors__user=user,
+            )
+            .filter(
+                Q(rentalunit_contracts__date_end__isnull=True)
+                | Q(rentalunit_contracts__date_end__gte=today)
+            )
+            .distinct()
+        )
 
 
 class ContractViewSet(viewsets.ReadOnlyModelViewSet):
