@@ -10,9 +10,9 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView, ResidentCapabilitiesView
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView, ResidentCapabilitiesView, ResidentMaintenanceRequestViewSet
 from geno.billing import get_income_account, get_receivables_account
-from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
+from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory, ResidentMaintenanceRequest
 
 from .base import GenoAdminTestCase
 
@@ -1285,3 +1285,71 @@ class AlumbrisResidentPortalPageTest(GenoAdminTestCase):
         self.assertIn('id="next"', markup)
         self.assertIn('credentials:"same-origin"', markup)
         self.assertNotIn('innerHTML', markup)
+
+
+class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
+    """Resident maintenance is writable only for a currently occupied unit."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.tenant = get_user_model().objects.create_user(username="alumbris_repair_tenant")
+        cls.other = get_user_model().objects.create_user(username="alumbris_repair_other")
+        cls.addresses[0].user = cls.tenant
+        cls.addresses[0].save(update_fields=["user"])
+
+    def call(self, user, method="get", payload=None, pk=None):
+        factory = APIRequestFactory()
+        request = factory.post("/api/v1/geno/resident-maintenance/", payload or {}, format="json") if method == "post" else factory.get("/api/v1/geno/resident-maintenance/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        action = {"post": "create"} if method == "post" else {"get": "retrieve" if pk is not None else "list"}
+        view = ResidentMaintenanceRequestViewSet.as_view(action)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_anonymous_cannot_read_or_create(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+        self.assertIn(self.call(None, "post", {"rental_unit": self.rentalunits[0].pk, "title": "Avaria", "description": "Falta eletricidade no quarto."}).status_code, (401, 403))
+
+    def test_owner_can_create_and_read_ticket_but_other_cannot(self):
+        response = self.call(self.tenant, "post", {
+            "rental_unit": self.rentalunits[0].pk,
+            "title": "  Torneira avariada  ",
+            "description": "A torneira da cozinha perde água continuamente.",
+            "status": "resolved",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "open")
+        self.assertEqual(response.data["title"], "Torneira avariada")
+        pk = response.data["id"]
+        self.assertEqual(self.call(self.tenant, pk=pk).status_code, 200)
+        self.assertEqual(self.call(self.other, pk=pk).status_code, 404)
+        self.assertEqual(self.call(self.other).data["count"], 0)
+        ticket = ResidentMaintenanceRequest.objects.get(pk=pk)
+        self.assertEqual(ticket.resident, self.tenant)
+
+    def test_unrelated_rental_unit_and_short_description_rejected(self):
+        for unit in (self.rentalunits[3].pk,):
+            response = self.call(self.tenant, "post", {
+                "rental_unit": unit, "title": "Pedido", "description": "Problema com a porta.",
+            })
+            self.assertEqual(response.status_code, 400)
+        response = self.call(self.tenant, "post", {
+            "rental_unit": self.rentalunits[0].pk, "title": "Pedido", "description": "Curto",
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ResidentMaintenanceRequest.objects.count(), 0)
+
+    def test_non_owner_cannot_update_existing_ticket(self):
+        ticket = ResidentMaintenanceRequest.objects.create(
+            resident=self.tenant, rental_unit=self.rentalunits[0],
+            title="Problema", description="A janela não fecha corretamente.",
+        )
+        request = APIRequestFactory().patch(
+            "/api/v1/geno/resident-maintenance/%s/" % ticket.pk,
+            {"status": "closed"}, format="json",
+        )
+        force_authenticate(request, user=self.other)
+        view = ResidentMaintenanceRequestViewSet.as_view({"patch": "partial_update"})
+        self.assertEqual(view(request, pk=ticket.pk).status_code, 405)
