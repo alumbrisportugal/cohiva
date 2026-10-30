@@ -717,6 +717,12 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
             {entry["id"] for entry in self.call(self.resident).data["results"]},
         )
 
+    def test_inactive_contract_hides_current_document(self):
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
+        self.contracts[0].active = False
+        self.contracts[0].save(update_fields=["active"])
+        self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
+
     def test_revocation_immediately_removes_current_document(self):
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
         self.own.resident_visible = False
@@ -788,6 +794,13 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
     @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=())
     def test_default_deny_historical_metadata(self):
         self.assertEqual(self.call(self.former).data["count"], 0)
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
+
+    def test_inactive_contract_hides_historical_document(self):
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
+        contract = self.old_doc.content_object
+        contract.active = False
+        contract.save(update_fields=["active"])
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
 
     def test_revocation_immediately_removes_historical_document(self):
