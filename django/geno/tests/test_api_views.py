@@ -10,9 +10,9 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet
 from geno.billing import get_income_account, get_receivables_account
-from geno.models import Contract, Invoice, InvoiceCategory
+from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
 from .base import GenoAdminTestCase
 
@@ -659,3 +659,54 @@ class AlumbrisFormerTenantInvoiceHistoryAPITest(GenoAdminTestCase):
 
     def test_successor_cannot_read_predecessor_history(self):
         self.assertEqual(self.call(self.successor, self.old_invoice.id).status_code, 404)
+
+
+class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
+    """A tenant only sees contract-linked document titles, never data blobs."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.resident = get_user_model().objects.create_user(username="alumbris_docs_resident")
+        cls.other = get_user_model().objects.create_user(username="alumbris_docs_other")
+        cls.addresses[0].user = cls.resident
+        cls.addresses[0].save(update_fields=["user"])
+        cls.type = DocumentType.objects.create(name="alumbris_test_contract_doc")
+        cls.own = Document.objects.create(
+            name="Own contract", doctype=cls.type, data='{"private":"never expose"}',
+            content_object=cls.contracts[0],
+        )
+        cls.unrelated = Contract.objects.create(
+            date=datetime.date.today(), state="unterzeichnet",
+        )
+        cls.unrelated.contractors.add(cls.addresses[2])
+        cls.unrelated.rental_units.add(cls.rentalunits[3])
+        cls.foreign = Document.objects.create(
+            name="Another resident", doctype=cls.type, data='{"private":"secret"}',
+            content_object=cls.unrelated,
+        )
+
+    def call(self, user, pk=None):
+        view = ResidentContractDocumentViewSet.as_view(
+            {"get": "retrieve" if pk is not None else "list"}
+        )
+        request = APIRequestFactory().get("/api/v1/geno/resident-contract-document/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_own_metadata_only(self):
+        result = self.call(self.resident)
+        self.assertEqual(result.status_code, 200)
+        ids = {row["id"] for row in result.data["results"]}
+        self.assertIn(self.own.id, ids)
+        self.assertNotIn(self.foreign.id, ids)
+        self.assertEqual(self.call(self.resident, self.foreign.id).status_code, 404)
+        self.assertEqual(self.call(self.other, self.own.id).status_code, 404)
+        detail = self.call(self.resident, self.own.id)
+        self.assertEqual(set(detail.data), {"id", "name", "doctype", "ts_created"})
+        self.assertNotIn("data", detail.data)
