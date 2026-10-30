@@ -67,12 +67,12 @@ class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = RentalUnit.objects.filter(active=True)
     serializer_class = RentalUnitSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
         if self.request.user.is_staff:
             return RentalUnitSerializer
         return ResidentRentalUnitSerializer
-    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -100,12 +100,12 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     serializer_class = ContractSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_serializer_class(self):
         if self.request.user.is_staff:
             return ContractSerializer
         return ResidentContractSerializer
-    permission_classes = [permissions.IsAuthenticated]
     queryset = Contract.objects.filter(
         state__in=("unterzeichnet", "gekuendigt"), main_contract=None
     )
