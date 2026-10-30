@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -972,3 +972,80 @@ class AlumbrisResidentPortalOverviewTest(GenoAdminTestCase):
         )
         self.assertNotIn("amount", str(former.data))
         self.assertNotIn("data", str(former.data))
+
+
+class AlumbrisResidentPortfolioIntegrationTest(GenoAdminTestCase):
+    """Portable snapshot: authorized objects, limits and private-field exclusion."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.tenant = get_user_model().objects.create_user(username="alumbris_portfolio_tenant")
+        cls.stranger = get_user_model().objects.create_user(username="alumbris_portfolio_stranger")
+        cls.addresses[0].user = cls.tenant
+        cls.addresses[0].save(update_fields=["user"])
+        cls.owned_contract = cls.contracts[0]
+        cls.type = DocumentType.objects.create(name="alumbris_portfolio_test")
+        cls.visible_doc = Document.objects.create(
+            name="Visible lease", data='{"private":"never"}',
+            resident_visible=True, doctype=cls.type,
+            content_object=cls.owned_contract,
+        )
+        cls.private_doc = Document.objects.create(
+            name="Private note", data='{"private":"hidden"}',
+            resident_visible=False, doctype=cls.type,
+            content_object=cls.owned_contract,
+        )
+
+    def call(self, user):
+        request = APIRequestFactory().get("/api/v1/geno/resident-portfolio/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return ResidentPortfolioView.as_view()(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_portfolio_test",))
+    def test_only_visible_owned_document_and_safe_fields(self):
+        response = self.call(self.tenant)
+        self.assertEqual(response.status_code, 200)
+        docs = response.data["current_documents"]
+        self.assertEqual(docs["total"], 1)
+        self.assertEqual(docs["items"][0]["id"], self.visible_doc.pk)
+        self.assertNotIn("data", docs["items"][0])
+        self.assertNotIn("template", docs["items"][0])
+        self.assertNotIn("comment", docs["items"][0])
+        self.assertNotIn(str(self.private_doc.pk), str(docs["items"]))
+        self.assertEqual(
+            set(response.data),
+            {"current_contracts", "historical_contracts", "current_units",
+             "current_invoices", "historical_invoices",
+             "current_documents", "historical_documents"},
+        )
+        for section in response.data.values():
+            self.assertEqual(set(section), {"total", "items", "truncated"})
+            self.assertEqual(section["total"] >= len(section["items"]), True)
+            self.assertEqual(section["truncated"], section["total"] > 50)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_portfolio_test",))
+    def test_cross_tenant_snapshot_is_empty_for_stranger(self):
+        result = self.call(self.stranger)
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(all(section["total"] == 0 for section in result.data.values()))
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_portfolio_test",))
+    def test_document_revocation_reflected_without_stale_snapshot(self):
+        self.assertEqual(self.call(self.tenant).data["current_documents"]["total"], 1)
+        self.visible_doc.resident_visible = False
+        self.visible_doc.save(update_fields=["resident_visible"])
+        self.assertEqual(self.call(self.tenant).data["current_documents"]["total"], 0)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_portfolio_test",))
+    def test_portfolio_caps_each_collection_to_fifty(self):
+        with patch.object(ResidentPortfolioView, "MAX_ITEMS_PER_SECTION", 1):
+            result = self.call(self.tenant)
+        contracts = result.data["current_contracts"]
+        self.assertLessEqual(len(contracts["items"]), 1)
+        self.assertEqual(contracts["truncated"], contracts["total"] > 1)
