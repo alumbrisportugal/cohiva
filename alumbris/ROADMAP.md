@@ -180,3 +180,14 @@
 - Staff may list/view tickets via the repair API but cannot create tickets
   through the resident submission endpoint. New permission and negative
   tests cover these boundaries.
+
+## Maintenance conversations (experimental)
+- Migration 0035 adds messages associated with a maintenance request,
+  author and creation date. Resident authorship is server-controlled.
+- `GET/POST /api/v1/geno/resident-maintenance-comments/` uses ticket
+  ownership for residents; staff need explicit view/change ticket permissions.
+- Reply creation is rejected after a ticket is marked `closed`. The resident
+  portal can open conversations and send replies via authenticated CSRF
+  protected requests.
+- Staff notifications, server-side pagination, event audit trail, attachment
+  scanning and cross-browser acceptance tests remain pending. No release.
