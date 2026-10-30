@@ -63,6 +63,16 @@ class AccessTests(unittest.TestCase):
         self.assertFalse(self.allow(1, unit_ids=set()))
         self.assertFalse(self.allow(1, contractor_ids=set()))
 
+    def test_malformed_ids_fail_closed(self):
+        self.assertFalse(self.allow("1"))
+        self.assertFalse(self.allow(1.0))
+        self.assertFalse(self.allow(1, requested_unit_id="101"))
+        self.assertFalse(self.allow(1, requested_unit_id=True))
+        self.assertFalse(self.allow(1, contractor_ids={True, 1}))
+        self.assertFalse(self.allow(1, unit_ids={101, "102"}))
+        self.assertFalse(self.allow(1, contractor_ids=[1, 2]))
+        self.assertFalse(self.allow(1, unit_ids=[101]))
+
     def test_new_occupant_not_entitled_to_predecessor_contract(self):
         self.assertFalse(self.allow(4))
         self.assertTrue(self.allow(4, contractor_ids={4}, start=date(2026, 10, 1)))
