@@ -279,6 +279,21 @@ class ResidentTimelineView(APIView):
         if any(kind not in self.VALID_KINDS for kind in kinds):
             raise ValidationError({"kind": "Unknown timeline event type."})
         selected = set(kinds or self.VALID_KINDS)
+        date_filters = {}
+        for parameter in ("from_date", "to_date"):
+            raw = request.query_params.get(parameter)
+            if raw is None:
+                continue
+            try:
+                parsed = date.fromisoformat(raw)
+                if parsed.isoformat() != raw:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError({parameter: "Expected YYYY-MM-DD."})
+            date_filters[parameter] = parsed
+        if (date_filters.get("from_date") and date_filters.get("to_date")
+                and date_filters["from_date"] > date_filters["to_date"]):
+            raise ValidationError({"date_range": "Start date must precede end date."})
         sources = (
             ("invoice", ResidentInvoiceViewSet, "date", "name"),
             ("historical_invoice", ResidentInvoiceHistoryViewSet, "date", "name"),
@@ -291,7 +306,13 @@ class ResidentTimelineView(APIView):
                 continue
             viewset = viewset_class()
             viewset.request = request
-            queryset = viewset.get_queryset().order_by("-" + date_field, "-pk")
+            queryset = viewset.get_queryset()
+            lookup = date_field + "__date" if date_field == "ts_created" else date_field
+            if "from_date" in date_filters:
+                queryset = queryset.filter(**{lookup + "__gte": date_filters["from_date"]})
+            if "to_date" in date_filters:
+                queryset = queryset.filter(**{lookup + "__lte": date_filters["to_date"]})
+            queryset = queryset.order_by("-" + date_field, "-pk")
             for item in queryset[:self.MAX_EVENTS]:
                 timestamp = getattr(item, date_field)
                 events.append({
