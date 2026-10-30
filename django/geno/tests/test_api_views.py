@@ -422,6 +422,20 @@ class AlumbrisResidentContractAPITest(GenoAdminTestCase):
         self.assertEqual(self.call(self.resident, old.id).status_code, 404)
         self.assertEqual(self.call(self.resident, cancelled.id).status_code, 404)
 
+    def test_staff_can_list_contracts(self):
+        admin = get_user_model().objects.get(username="superuser")
+        response = self.call(admin)
+        self.assertEqual(response.status_code, 200)
+        ids = {entry["id"] for entry in response.data["results"]}
+        self.assertIn(self.contracts[0].id, ids)
+        self.assertIn(self.future_contract.id, ids)
+        self.assertIn(self.elsewhere_contract.id, ids)
+
+    def test_contract_without_primary_address_user_not_exposed(self):
+        result = self.call(self.stranger)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["count"], 0)
+
     def test_stranger_has_no_contracts(self):
         response = self.call(self.stranger)
         self.assertEqual(response.status_code, 200)
