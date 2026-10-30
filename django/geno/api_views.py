@@ -24,7 +24,7 @@ from geno.billing import (
     get_reference_nr,
     render_qrbill,
 )
-from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit, ResidentMaintenanceRequest
+from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit, ResidentMaintenanceRequest, ResidentMaintenanceComment
 from geno.serializers import (
     ContractSerializer,
     GroupSerializer,
@@ -34,6 +34,7 @@ from geno.serializers import (
     ResidentInvoiceSerializer,
     ResidentContractDocumentSerializer,
     ResidentMaintenanceRequestSerializer,
+    ResidentMaintenanceCommentSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -403,6 +404,29 @@ class ResidentMaintenanceRequestViewSet(viewsets.ModelViewSet):
         if not current_units.get_queryset().filter(pk=unit.pk).exists():
             raise ValidationError({"rental_unit": "A fração não está associada a um contrato atual."})
         serializer.save(resident=self.request.user)
+
+
+class ResidentMaintenanceCommentViewSet(viewsets.ModelViewSet):
+    """Conversation messages scoped to the ticket owner or authorized staff."""
+
+    serializer_class = ResidentMaintenanceCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        queryset = ResidentMaintenanceComment.objects.select_related("ticket", "author")
+        if self.request.user.is_staff and self.request.user.has_perm("geno.view_residentmaintenancerequest"):
+            return queryset
+        return queryset.filter(ticket__resident=self.request.user)
+
+    def perform_create(self, serializer):
+        ticket = serializer.validated_data["ticket"]
+        if ticket.resident_id != self.request.user.pk:
+            if not (self.request.user.is_staff and self.request.user.has_perm("geno.change_residentmaintenancerequest")):
+                raise ValidationError({"ticket": "Não tens permissão para comentar este pedido."})
+        if ticket.status == "closed":
+            raise ValidationError({"ticket": "Este pedido está encerrado."})
+        serializer.save(author=self.request.user)
 
 
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
