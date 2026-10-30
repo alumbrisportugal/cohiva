@@ -1,0 +1,21 @@
+Linking missing template to example ./portal/templates/portal/base.html → ./examples/base.html.
+Linking missing template to example ./portal/templates/portal/base_secondary.html → ./examples/base_secondary.html.
+Linking missing template to example ./portal/templates/portal/secondary.html → ./examples/secondary.html.
+Linking missing template to example ./portal/templates/portal/portal_page.html → ./examples/portal_page.html.
+Linking missing template to example ./portal/static → ./static_example.
+Linking missing template to example ./geno/templates/geno/contract_email.html → ./examples/contract_email.html.
+Linking missing template to example ./geno/templates/geno/email_invoice.html → ./examples/email_invoice.html.
+Linking missing template to example ./geno/templates/geno/email_rent_bill_first.html → ./examples/email_rent_bill_first.html.
+Linking missing template to example ./website → ./website_example.
+Copying missing config file from example ./cohiva/settings_production.py → ./cohiva/settings_production_example.py.
+ Container alumbris-living-test-20261030-web-1  Recreate
+ Container alumbris-living-test-20261030-web-1  Recreated
+ Container alumbris-living-test-20261030-web-1  Starting
+ Container alumbris-living-test-20261030-web-1  Started
+CODE_SWITCH_HTTP_PASS 404
+ Container alumbris-living-test-20261030-web-1  Recreate
+ Container alumbris-living-test-20261030-web-1  Recreated
+ Container alumbris-living-test-20261030-web-1  Starting
+ Container alumbris-living-test-20261030-web-1  Started
+CODE_SWITCH_HTTP_PASS 302
+ROLLBACK_REHEARSAL_PASS: previous code then candidate restored, same DB/volumes, no schema changes

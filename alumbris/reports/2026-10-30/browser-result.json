@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "contractURL": "https://localhost:18443/geno/living/contracts/8/",
+  "checks": [
+    "login",
+    "new-tenancy",
+    "contract-detail",
+    "desktop",
+    "mobile-no-overflow",
+    "anonymous-isolation",
+    "no-page-errors",
+    "resident-login",
+    "resident-denied-global-management"
+  ],
+  "tls": "staging internal CA; browser exception only; verify CA independently"
+}

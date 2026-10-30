@@ -1,0 +1,46 @@
+name: Alumbris pt-PT translation integrity
+on:
+  push:
+    paths:
+      - 'pwa/src/i18n/**'
+      - 'alumbris/check_pwa_i18n.py'
+      - 'alumbris/tests/**'
+      - 'django/geno/tenancy_period.py'
+      - 'django/geno/tenancy_access.py'
+      - 'django/geno/api_views.py'
+      - 'django/geno/models.py'
+      - 'django/geno/migrations/**'
+      - 'django/geno/serializers.py'
+      - 'django/geno/api_urls.py'
+      - 'django/geno/tests/test_api_views.py'
+      - 'django/geno/views.py'
+      - '.github/workflows/alumbris-i18n-check.yml'
+  pull_request:
+    paths:
+      - 'pwa/src/i18n/**'
+      - 'alumbris/check_pwa_i18n.py'
+      - 'alumbris/tests/**'
+      - 'django/geno/tenancy_period.py'
+      - 'django/geno/tenancy_access.py'
+      - 'django/geno/api_views.py'
+      - 'django/geno/models.py'
+      - 'django/geno/migrations/**'
+      - 'django/geno/serializers.py'
+      - 'django/geno/api_urls.py'
+      - 'django/geno/tests/test_api_views.py'
+      - 'django/geno/views.py'
+      - '.github/workflows/alumbris-i18n-check.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare European Portuguese with English catalog
+        run: python3 alumbris/check_pwa_i18n.py
+      - name: Run Alumbris regression tests
+        run: python3 -m unittest discover -s alumbris/tests -p 'test_*.py'

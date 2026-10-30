@@ -1,0 +1,1 @@
+{"passed": true, "checks": ["two-resident-contract-unit-isolation", "maintenance-request-comment-isolation", "management-csrf-write-rejection"], "tls": "verified using exact staging-local root CA"}

@@ -1,0 +1,11 @@
+{% extends 'geno/living/base.html' %}
+{% block title %}Contrato {{ contract.pk }}{% endblock %}
+{% block content %}
+<h1>Contrato {{ contract.pk }}</h1>
+<section class="card"><h2>Condições contratuais</h2><dl>
+<dt>Estado</dt><dd>{% if contract.state == 'unterzeichnet' %}Assinado{% elif contract.state == 'angeboten' %}Proposta{% elif contract.state == 'gekuendigt' %}Denunciado{% elif contract.state == 'ungueltig' %}Anulado{% else %}Por definir{% endif %}</dd>
+<dt>Início</dt><dd>{{ contract.date|date:'d/m/Y' }}</dd><dt>Fim</dt><dd>{{ contract.date_end|date:'d/m/Y'|default:'Sem data definida' }}</dd></dl>
+<h2>Inquilinos</h2>{% for person in contract.contractors.all %}<p>{{ person.first_name }} {{ person.name }} · {{ person.email }}</p>{% endfor %}</section>
+{% for unit in contract.rental_units.all %}<section class="card"><h2>{{ unit.building.name }} · {{ unit.name }}</h2><p>{{ unit.building.street_name }} {{ unit.building.house_number }} · {{ unit.building.city_zipcode }} {{ unit.building.city_name }}</p><dl><dt>Piso</dt><dd>{{ unit.floor|default:'Por indicar' }}</dd><dt>Área</dt><dd>{{ unit.area|default_if_none:'—' }} m²</dd><dt>Renda configurada da fração</dt><dd>{{ unit.rent_netto|default_if_none:'—' }} € / {{ unit.billing_period }} mês(es)</dd></dl></section>{% endfor %}
+<p class="note">A renda acima é a configuração atual da fração no Cohiva, não um extrato histórico de condições nem um recibo fiscal. Cauções, renovações e obrigações fiscais têm validação pendente.</p>
+{% endblock %}

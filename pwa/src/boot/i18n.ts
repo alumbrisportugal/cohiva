@@ -26,6 +26,7 @@ function getBrowserLocale(): string {
     de: 'de-CH', // All German variants use Swiss German
     en: 'en-US', // All English variants use US English
     fr: 'fr-FR', // All French variants use French
+    pt: 'pt-PT', // European Portuguese
   }
 
   return localeMap[detectedLang] || 'en-US'

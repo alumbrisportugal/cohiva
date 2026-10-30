@@ -5,8 +5,10 @@ from datetime import date, datetime
 
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.models import Group, User
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
+from django.utils import timezone
 from django.http import FileResponse
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import ValidationError
@@ -22,11 +24,17 @@ from geno.billing import (
     get_reference_nr,
     render_qrbill,
 )
-from geno.models import Address, Building, Contract, Invoice, InvoiceCategory, RentalUnit
+from geno.models import Address, Building, Contract, Document, Invoice, InvoiceCategory, RentalUnit, ResidentMaintenanceRequest, ResidentMaintenanceComment
 from geno.serializers import (
     ContractSerializer,
     GroupSerializer,
     RentalUnitSerializer,
+    ResidentContractSerializer,
+    ResidentRentalUnitSerializer,
+    ResidentInvoiceSerializer,
+    ResidentContractDocumentSerializer,
+    ResidentMaintenanceRequestSerializer,
+    ResidentMaintenanceCommentSerializer,
     UserSerializer,
 )
 from geno.utils import (
@@ -44,7 +52,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Restricted until fine-grained object-level permissions are verified.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -54,29 +63,479 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Restricted until fine-grained object-level permissions are verified.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint that allows active rental units to be viewed.
-    """
+    """Active rental units visible to staff or their current signed occupants."""
 
     queryset = RentalUnit.objects.filter(active=True)
     serializer_class = RentalUnitSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.user.is_staff:
+            return RentalUnitSerializer
+        return ResidentRentalUnitSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return (
+            queryset.filter(
+                Q(rentalunit_contracts__date_end__isnull=True)
+                | Q(rentalunit_contracts__date_end__gte=today),
+                rentalunit_contracts__state="unterzeichnet",
+                rentalunit_contracts__date__lte=today,
+                rentalunit_contracts__contractors__user=user,
+            )
+            .distinct()
+        )
 
 
 class ContractViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint that allows active contracts to be viewed (excluding subcontracts).
+    """Read-only contracts visible to staff or a current signed contractor.
+
+    Filtering is server-side and applies to both list and detail actions.
+    A resident cannot enumerate a former tenant's or another unit's records.
     """
 
-    queryset = Contract.objects.filter(state__in=("unterzeichnet", "gekuendigt")).filter(
-        main_contract=None
-    )
     serializer_class = ContractSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.request.user.is_staff:
+            return ContractSerializer
+        return ResidentContractSerializer
+    queryset = Contract.objects.filter(
+        state__in=("unterzeichnet", "gekuendigt"), main_contract=None
+    )
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return (
+            queryset.filter(
+                state="unterzeichnet",
+                date__lte=today,
+                contractors__user=user,
+            )
+            .filter(Q(date_end__isnull=True) | Q(date_end__gte=today))
+            .distinct()
+        )
+
+
+class ResidentContractHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Former tenants may read only the headers of their own ended contracts."""
+
+    queryset = Contract.objects.filter(
+        state__in=("unterzeichnet", "gekuendigt"),
+        date_end__isnull=False,
+        main_contract=None,
+    )
+    serializer_class = ResidentContractSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().filter(date_end__lt=timezone.localdate())
+        if self.request.user.is_staff:
+            return queryset
+        return queryset.filter(contractors__user=self.request.user).distinct()
+
+
+class ResidentOverviewView(APIView):
+    """Privacy-limited dashboard counters built from the resident APIs.
+
+    No financial totals or personally identifying co-tenant data are returned.
+    Counts share exactly the same authorization queries as list/detail routes.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        def visible_count(viewset_class):
+            viewset = viewset_class()
+            viewset.request = request
+            return viewset.get_queryset().count()
+
+        return Response({
+            "current_contracts": visible_count(ContractViewSet),
+            "historical_contracts": visible_count(ResidentContractHistoryViewSet),
+            "current_units": visible_count(RentalUnitViewSet),
+            "current_invoices": visible_count(ResidentInvoiceViewSet),
+            "historical_invoices": visible_count(ResidentInvoiceHistoryViewSet),
+            "current_documents": visible_count(ResidentContractDocumentViewSet),
+            "historical_documents": visible_count(ResidentContractDocumentHistoryViewSet),
+            "maintenance_requests": visible_count(ResidentMaintenanceRequestViewSet),
+        })
+
+
+class ResidentPortfolioView(APIView):
+    """Bounded, read-only portal snapshot with object-scoped resident records.
+
+    This is intentionally separate from payment processing or official
+    Portuguese fiscal documents. Each collection reuses the corresponding
+    list/detail authorization query; no arbitrary object IDs are accepted.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    MAX_ITEMS_PER_SECTION = 50
+
+    def get(self, request):
+        sections = (
+            ("current_contracts", ContractViewSet, ResidentContractSerializer),
+            ("historical_contracts", ResidentContractHistoryViewSet, ResidentContractSerializer),
+            ("current_units", RentalUnitViewSet, ResidentRentalUnitSerializer),
+            ("current_invoices", ResidentInvoiceViewSet, ResidentInvoiceSerializer),
+            ("historical_invoices", ResidentInvoiceHistoryViewSet, ResidentInvoiceSerializer),
+            ("current_documents", ResidentContractDocumentViewSet, ResidentContractDocumentSerializer),
+            ("historical_documents", ResidentContractDocumentHistoryViewSet, ResidentContractDocumentSerializer),
+        )
+        payload = {}
+        for key, viewset_class, serializer_class in sections:
+            viewset = viewset_class()
+            viewset.request = request
+            queryset = viewset.get_queryset().order_by("pk")
+            total = queryset.count()
+            payload[key] = {
+                "total": total,
+                "items": serializer_class(
+                    queryset[:self.MAX_ITEMS_PER_SECTION], many=True,
+                ).data,
+                "truncated": total > self.MAX_ITEMS_PER_SECTION,
+            }
+        return Response(payload)
+
+
+class ResidentPortfolioSectionView(APIView):
+    """Paginated read-only sections backed by the same tenant querysets.
+
+    Explicit section names prevent arbitrary model access, and the page cap
+    protects the endpoint from accidental unbounded database responses.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    PAGE_SIZE = 25
+    MAX_PAGE = 10000
+
+    def get(self, request, section):
+        sections = {
+            "current-contracts": (ContractViewSet, ResidentContractSerializer),
+            "historical-contracts": (ResidentContractHistoryViewSet, ResidentContractSerializer),
+            "current-units": (RentalUnitViewSet, ResidentRentalUnitSerializer),
+            "current-invoices": (ResidentInvoiceViewSet, ResidentInvoiceSerializer),
+            "historical-invoices": (ResidentInvoiceHistoryViewSet, ResidentInvoiceSerializer),
+            "current-documents": (ResidentContractDocumentViewSet, ResidentContractDocumentSerializer),
+            "historical-documents": (ResidentContractDocumentHistoryViewSet, ResidentContractDocumentSerializer),
+        }
+        if section not in sections:
+            from django.http import Http404
+
+            raise Http404
+        raw_page = request.query_params.get("page", "1")
+        if not raw_page.isdecimal() or len(raw_page) > 5:
+            raise ValidationError({"page": "Expected a positive integer."})
+        page = int(raw_page)
+        if not 1 <= page <= self.MAX_PAGE:
+            raise ValidationError({"page": "Page is out of range."})
+        viewset_class, serializer_class = sections[section]
+        viewset = viewset_class()
+        viewset.request = request
+        queryset = viewset.get_queryset().order_by("pk")
+        total = queryset.count()
+        offset = (page - 1) * self.PAGE_SIZE
+        items = serializer_class(
+            queryset[offset: offset + self.PAGE_SIZE], many=True
+        ).data
+        return Response({
+            "section": section,
+            "page": page,
+            "page_size": self.PAGE_SIZE,
+            "total": total,
+            "has_next": offset + self.PAGE_SIZE < total,
+            "items": items,
+        })
+
+
+class ResidentTimelineView(APIView):
+    """Tenant-authorized, bounded and filterable activity timeline.
+
+    Only published document metadata and permitted invoice summaries are
+    represented. This is not an official fiscal or payment history.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    MAX_EVENTS = 30
+    VALID_KINDS = (
+        "invoice", "historical_invoice", "document", "historical_document",
+    )
+
+    def get(self, request):
+        kinds = request.query_params.getlist("kind")
+        # Reject duplicated or ambiguous scalar filters instead of silently
+        # using the final value supplied by the client.
+        for scalar in ("from_date", "to_date"):
+            if len(request.query_params.getlist(scalar)) > 1:
+                raise ValidationError({scalar: "Provide exactly one date."})
+        if len(kinds) > len(self.VALID_KINDS):
+            raise ValidationError({"kind": "Too many event types."})
+        if any(kind not in self.VALID_KINDS for kind in kinds):
+            raise ValidationError({"kind": "Unknown timeline event type."})
+        selected = set(kinds or self.VALID_KINDS)
+        date_filters = {}
+        for parameter in ("from_date", "to_date"):
+            raw = request.query_params.get(parameter)
+            if raw is None:
+                continue
+            try:
+                parsed = date.fromisoformat(raw)
+                if parsed.isoformat() != raw:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise ValidationError({parameter: "Expected YYYY-MM-DD."})
+            date_filters[parameter] = parsed
+        if (date_filters.get("from_date") and date_filters.get("to_date")
+                and date_filters["from_date"] > date_filters["to_date"]):
+            raise ValidationError({"date_range": "Start date must precede end date."})
+        sources = (
+            ("invoice", ResidentInvoiceViewSet, "date", "name"),
+            ("historical_invoice", ResidentInvoiceHistoryViewSet, "date", "name"),
+            ("document", ResidentContractDocumentViewSet, "ts_created", "name"),
+            ("historical_document", ResidentContractDocumentHistoryViewSet, "ts_created", "name"),
+        )
+        events = []
+        for kind, viewset_class, date_field, title_field in sources:
+            if kind not in selected:
+                continue
+            viewset = viewset_class()
+            viewset.request = request
+            queryset = viewset.get_queryset()
+            lookup = date_field + "__date" if date_field == "ts_created" else date_field
+            if "from_date" in date_filters:
+                queryset = queryset.filter(**{lookup + "__gte": date_filters["from_date"]})
+            if "to_date" in date_filters:
+                queryset = queryset.filter(**{lookup + "__lte": date_filters["to_date"]})
+            queryset = queryset.order_by("-" + date_field, "-pk")
+            for item in queryset[:self.MAX_EVENTS]:
+                timestamp = getattr(item, date_field)
+                events.append({
+                    "kind": kind,
+                    "id": item.pk,
+                    "title": getattr(item, title_field),
+                    "date": timestamp.date().isoformat()
+                    if isinstance(timestamp, datetime) else timestamp.isoformat(),
+                })
+        events.sort(
+            key=lambda item: (item["date"], item["kind"], item["id"]),
+            reverse=True,
+        )
+        return Response({
+            "events": events[:self.MAX_EVENTS],
+            "limit": self.MAX_EVENTS,
+        })
+
+
+class ResidentCapabilitiesView(APIView):
+    """Machine-readable portal contract; does not confer authorization.
+
+    Feature discovery reports route/schema support without exposing models,
+    settings, monetary data or any tenant's records.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({
+            "api_version": 1,
+            "read_only": True,
+            "overview": True,
+            "portfolio": {
+                "enabled": True,
+                "max_items_per_section": ResidentPortfolioView.MAX_ITEMS_PER_SECTION,
+                "sections": (
+                    "current-contracts", "historical-contracts", "current-units",
+                    "current-invoices", "historical-invoices",
+                    "current-documents", "historical-documents",
+                ),
+                "page_size": ResidentPortfolioSectionView.PAGE_SIZE,
+            },
+            "timeline": {
+                "enabled": True,
+                "max_events": ResidentTimelineView.MAX_EVENTS,
+                "kinds": ResidentTimelineView.VALID_KINDS,
+                "date_filters": ("from_date", "to_date"),
+            },
+            "document_download": False,
+            "online_payments": False,
+            "official_pt_tax_receipts": False,
+        })
+
+
+class ResidentMaintenanceRequestViewSet(viewsets.ModelViewSet):
+    """Tenants create and read their own tickets; staff may triage.
+
+    Residents cannot assign another resident, change ticket status, update
+    existing requests or choose a rental unit without a current lease.
+    """
+
+    serializer_class = ResidentMaintenanceRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        queryset = ResidentMaintenanceRequest.objects.select_related("rental_unit")
+        if self.request.user.is_staff and self.request.user.has_perm("geno.view_residentmaintenancerequest"):
+            return queryset
+        return queryset.filter(resident=self.request.user)
+
+    def perform_create(self, serializer):
+        if self.request.user.is_staff:
+            raise ValidationError({"detail": "A equipa administrativa deve gerir pedidos existentes."})
+        unit = serializer.validated_data["rental_unit"]
+        current_units = RentalUnitViewSet()
+        current_units.request = self.request
+        if not current_units.get_queryset().filter(pk=unit.pk).exists():
+            raise ValidationError({"rental_unit": "A fração não está associada a um contrato atual."})
+        serializer.save(resident=self.request.user)
+
+
+class ResidentMaintenanceCommentViewSet(viewsets.ModelViewSet):
+    """Conversation messages scoped to the ticket owner or authorized staff."""
+
+    serializer_class = ResidentMaintenanceCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_queryset(self):
+        queryset = ResidentMaintenanceComment.objects.select_related("ticket", "author")
+        if self.request.user.is_staff and self.request.user.has_perm("geno.view_residentmaintenancerequest"):
+            return queryset
+        return queryset.filter(ticket__resident=self.request.user)
+
+    def perform_create(self, serializer):
+        ticket = serializer.validated_data["ticket"]
+        if ticket.resident_id != self.request.user.pk:
+            if not (self.request.user.is_staff and self.request.user.has_perm("geno.change_residentmaintenancerequest")):
+                raise ValidationError({"ticket": "Não tens permissão para comentar este pedido."})
+        if ticket.status == "closed":
+            raise ValidationError({"ticket": "Este pedido está encerrado."})
+        serializer.save(author=self.request.user)
+
+
+class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
+    """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
+
+    queryset = Invoice.objects.filter(active=True, contract__isnull=False)
+    serializer_class = ResidentInvoiceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return queryset.filter(
+            Q(contract__date_end__isnull=True) | Q(contract__date_end__gte=today),
+            contract__state="unterzeichnet",
+            contract__date__lte=today,
+            contract__contractors__user=user,
+        ).distinct()
+
+
+class ResidentInvoiceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Historical invoice summaries restricted to their original contract parties.
+
+    Unlike the current invoice endpoint, this accepts ended signed/terminated
+    contracts. Each invoice must have a date within the old contract period.
+    It never grants access to documents belonging to a successor's contract.
+    """
+
+    queryset = Invoice.objects.filter(active=True, contract__isnull=False)
+    serializer_class = ResidentInvoiceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset.filter(contract__date_end__lt=timezone.localdate())
+        today = timezone.localdate()
+        return queryset.filter(
+            contract__state__in=("unterzeichnet", "gekuendigt"),
+            contract__contractors__user=user,
+            contract__date_end__lt=today,
+            date__gte=F("contract__date"),
+            date__lte=F("contract__date_end"),
+        ).distinct()
+
+
+class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
+    """Return contract document metadata, never raw document context or files."""
+
+    serializer_class = ResidentContractDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Document.objects.filter(
+            content_type=ContentType.objects.get_for_model(Contract),
+            doctype__name__in=getattr(settings, "ALUMBRIS_RESIDENT_DOCUMENT_TYPES", ()),
+            resident_visible=True,
+        )
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return queryset.filter(
+            object_id__in=Contract.objects.filter(
+                Q(date_end__isnull=True) | Q(date_end__gte=today),
+                active=True,
+                state="unterzeichnet",
+                date__lte=today,
+                contractors__user=user,
+            ).values("pk")
+        )
+
+
+class ResidentContractDocumentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Historical document metadata only, limited to original ended contracts.
+
+    This does not grant file download access. Document creation dates are not
+    used to prove ownership: metadata remains bound to the original contract.
+    """
+
+    serializer_class = ResidentContractDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Document.objects.filter(
+            content_type=ContentType.objects.get_for_model(Contract),
+            doctype__name__in=getattr(settings, "ALUMBRIS_RESIDENT_DOCUMENT_TYPES", ()),
+            resident_visible=True,
+        )
+        user = self.request.user
+        today = timezone.localdate()
+        if user.is_staff:
+            return queryset.filter(
+                object_id__in=Contract.objects.filter(date_end__lt=today).values("pk")
+            )
+        # GenericForeignKey prevents a direct join to contract dates. Restrict
+        # to the original contracting party and ended contracts server-side.
+        # Historical downloads require a separate, stricter authorization path.
+        return queryset.filter(
+            object_id__in=Contract.objects.filter(
+                state__in=("unterzeichnet", "gekuendigt"),
+                date_end__lt=today,
+                contractors__user=user,
+            ).values("pk")
+        )
 
 
 class Akonto(APIView):

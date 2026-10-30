@@ -48,6 +48,7 @@ from geno.models import (
     RegistrationEvent,
     RegistrationSlot,
     RentalUnit,
+    ResidentMaintenanceRequest,
     Share,
     ShareType,
     Tenant,
@@ -1110,6 +1111,7 @@ class DocumentAdmin(ObjectActionsMixin, GenoBaseAdmin):
     fields = [
         "name",
         "doctype",
+        "resident_visible",
         "data",
         "content_type",
         "comment",
@@ -1124,10 +1126,28 @@ class DocumentAdmin(ObjectActionsMixin, GenoBaseAdmin):
         "links",
         "backlinks",
     ]
-    list_display = ["name", "doctype", "content_type", "ts_created", "ts_modified"]
+    list_display = ["name", "doctype", "resident_visible", "content_type", "ts_created", "ts_modified"]
     search_fields = ["name", "comment"]
-    list_filter = ["doctype", "ts_created", "ts_modified", "content_type"]
+    list_filter = ["resident_visible", "doctype", "ts_created", "ts_modified", "content_type"]
     autocomplete_fields = ["doctype"]
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            fields.append("resident_visible")
+        return fields
+
+    def save_model(self, request, obj, form, change):
+        # Defence in depth: reject forged requests that bypass the admin form.
+        if not request.user.is_superuser:
+            previous = Document.objects.filter(pk=obj.pk).values_list(
+                "resident_visible", flat=True
+            ).first() if obj.pk else False
+            if obj.resident_visible != previous:
+                from django.core.exceptions import PermissionDenied
+
+                raise PermissionDenied("Only superusers may change document visibility")
+        super().save_model(request, obj, form, change)
 
 
 class BankAccountForm(forms.ModelForm):
@@ -2090,3 +2110,36 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 @admin.register(Group)
 class GroupAdmin(BaseGroupAdmin, ModelAdmin):
     pass
+
+
+@admin.register(ResidentMaintenanceRequest)
+class ResidentMaintenanceRequestAdmin(ModelAdmin):
+    """Staff triage with immutable resident submission and unit ownership."""
+
+    list_display = ("id", "title", "resident", "rental_unit", "status", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("title", "description", "resident__username", "rental_unit__name")
+    readonly_fields = (
+        "resident", "rental_unit", "title", "description", "created_at", "updated_at",
+    )
+    fields = (
+        "resident", "rental_unit", "title", "description",
+        "status", "created_at", "updated_at",
+    )
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser or (
+            request.user.is_staff and request.user.has_perm("geno.change_residentmaintenancerequest")
+        )
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not self.has_change_permission(request, obj):
+            fields.append("status")
+        return fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

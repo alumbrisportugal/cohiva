@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import Contract, RentalUnit
+from .models import Contract, Document, Invoice, RentalUnit, ResidentMaintenanceRequest, ResidentMaintenanceComment
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -91,3 +91,77 @@ class ContractSerializer(serializers.ModelSerializer):
         ]
         ## exclude unused fields: 'children', 'children_old', 'import_id',
         ## 'links', 'backlinks'
+
+
+class ResidentRentalUnitSerializer(serializers.ModelSerializer):
+    """Minimal resident-facing fields; no intercom IDs or admin comments."""
+
+    class Meta:
+        model = RentalUnit
+        fields = [
+            "id", "name", "label", "label_short", "rental_type",
+            "building", "floor", "area", "rooms",
+        ]
+
+
+class ResidentContractSerializer(serializers.ModelSerializer):
+    """Conservative projection: no unrelated party IDs or financial notes."""
+
+    class Meta:
+        model = Contract
+        fields = [
+            "id", "rental_units", "state", "date", "date_end",
+        ]
+
+
+class ResidentInvoiceSerializer(serializers.ModelSerializer):
+    """Minimal invoice summary, not an official Portuguese tax receipt."""
+
+    class Meta:
+        model = Invoice
+        fields = ["id", "contract", "name", "date", "amount", "year", "month"]
+        read_only_fields = fields
+
+
+class ResidentContractDocumentSerializer(serializers.ModelSerializer):
+    """Metadata only; document data and template are never included."""
+
+    class Meta:
+        model = Document
+        fields = ["id", "name", "doctype", "ts_created"]
+        read_only_fields = fields
+
+
+class ResidentMaintenanceRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResidentMaintenanceRequest
+        fields = [
+            "id", "rental_unit", "title", "description", "status",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "status", "created_at", "updated_at"]
+
+    def validate_title(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("Indica um assunto.")
+        return value
+
+    def validate_description(self, value):
+        value = value.strip()
+        if len(value) < 10:
+            raise serializers.ValidationError("Descreve o problema com pelo menos 10 caracteres.")
+        return value
+
+
+class ResidentMaintenanceCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResidentMaintenanceComment
+        fields = ("id", "ticket", "author", "message", "created_at")
+        read_only_fields = ("id", "author", "created_at")
+
+    def validate_message(self, value):
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("Escreve uma mensagem com pelo menos dois caracteres.")
+        return value

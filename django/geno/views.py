@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db.models import Q
@@ -220,7 +221,9 @@ def documents(request, doctype, obj_id, action):
     try:
         doctype_obj = DocumentType.objects.get(name=doctype)
         if action == "create":
-            if not request.user.has_perm("geno.add_document"):
+            # Legacy document generation accepts an object ID supplied by the
+            # caller. Do not expose it to tenants without object-level checks.
+            if not request.user.is_staff or not request.user.has_perm("geno.add_document"):
                 return unauthorized(request)
             template_pk = request.GET.get("template")
             if not template_pk:
@@ -228,9 +231,14 @@ def documents(request, doctype, obj_id, action):
             template = doctype_obj.templates.get(pk=template_pk)
             data = get_context_data(doctype, obj_id, {})
         elif action == "download":
-            if not request.user.has_perm("geno.regenerate_document"):
+            # Regeneration reveals stored document context and personal data.
+            # Keep this legacy admin route closed to resident accounts until
+            # document ownership checks are implemented for a separate API.
+            if not request.user.is_staff or not request.user.has_perm("geno.regenerate_document"):
                 return unauthorized(request)
-            doc = Document.objects.select_related("template").get(pk=obj_id)
+            doc = Document.objects.select_related("template").get(
+                pk=obj_id, doctype=doctype_obj
+            )
             template = doc.template or doctype_obj.templates.filter(active=True).first()
             if not template:
                 raise RuntimeError("Vorlage nicht gefunden.")
@@ -4781,3 +4789,15 @@ def registration(request, registration_id=None):
     template_data = {}
     template_data["forms"] = process_registration_forms(request, selector=registration_id)
     return render(request, "website/registration_form.html", template_data)
+
+
+@login_required
+@ensure_csrf_cookie
+def resident_portal(request):
+    """Read-only tenant portal shell, populated by authorized JSON APIs.
+
+    Client code never receives administrative models or secret document data.
+    """
+    return render(request, "geno/resident_portal.html", {
+        "portal_api_base": "/api/v1/geno/",
+    })
