@@ -10,9 +10,9 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView, ResidentCapabilitiesView, ResidentMaintenanceRequestViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView, ResidentCapabilitiesView, ResidentMaintenanceRequestViewSet, ResidentMaintenanceCommentViewSet
 from geno.billing import get_income_account, get_receivables_account
-from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory, ResidentMaintenanceRequest
+from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory, ResidentMaintenanceRequest, ResidentMaintenanceComment
 
 from .base import GenoAdminTestCase
 
@@ -1431,3 +1431,65 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         force_authenticate(request, user=self.other)
         view = ResidentMaintenanceRequestViewSet.as_view({"patch": "partial_update"})
         self.assertEqual(view(request, pk=ticket.pk).status_code, 405)
+
+
+class AlumbrisResidentMaintenanceCommentTest(GenoAdminTestCase):
+    """Ticket conversations must never cross tenant boundaries."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.tenant = get_user_model().objects.create_user(username="alumbris_comment_tenant")
+        cls.other = get_user_model().objects.create_user(username="alumbris_comment_other")
+        cls.ticket = ResidentMaintenanceRequest.objects.create(
+            resident=cls.tenant, rental_unit=cls.rentalunits[0],
+            title="Janela partida", description="A janela do quarto não fecha bem.",
+        )
+
+    def call(self, user, method="get", data=None, pk=None):
+        factory = APIRequestFactory()
+        if method == "post":
+            request = factory.post("/api/v1/geno/resident-maintenance-comments/", data or {}, format="json")
+        else:
+            request = factory.get("/api/v1/geno/resident-maintenance-comments/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        action = {"post": "create"} if method == "post" else {"get": "retrieve" if pk else "list"}
+        view = ResidentMaintenanceCommentViewSet.as_view(action)
+        return view(request, pk=pk) if pk else view(request)
+
+    def test_anonymous_and_stranger_cannot_create(self):
+        payload = {"ticket": self.ticket.pk, "message": "Quando será a reparação?"}
+        self.assertIn(self.call(None, "post", payload).status_code, (401, 403))
+        self.assertEqual(self.call(self.other, "post", payload).status_code, 400)
+        self.assertEqual(ResidentMaintenanceComment.objects.count(), 0)
+
+    def test_resident_comment_is_readable_only_by_owner(self):
+        response = self.call(self.tenant, "post", {
+            "ticket": self.ticket.pk, "author": self.other.pk,
+            "message": "A janela continua por reparar.",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["author"], self.tenant.pk)
+        comment = ResidentMaintenanceComment.objects.get(pk=response.data["id"])
+        self.assertEqual(comment.author_id, self.tenant.pk)
+        self.assertEqual(self.call(self.tenant, pk=comment.pk).status_code, 200)
+        self.assertEqual(self.call(self.other, pk=comment.pk).status_code, 404)
+        self.assertEqual(self.call(self.other).data["count"], 0)
+
+    def test_closed_ticket_rejects_new_comments(self):
+        self.ticket.status = "closed"
+        self.ticket.save(update_fields=["status"])
+        response = self.call(self.tenant, "post", {
+            "ticket": self.ticket.pk, "message": "Nova mensagem",
+        })
+        self.assertEqual(response.status_code, 400)
+
+    def test_staff_requires_ticket_permission(self):
+        staff = get_user_model().objects.create_user(
+            username="alumbris_comment_staff", is_staff=True,
+        )
+        payload = {"ticket": self.ticket.pk, "message": "Intervenção agendada."}
+        self.assertEqual(self.call(staff, "post", payload).status_code, 400)
+        self.assertEqual(self.call(staff).data["count"], 0)
