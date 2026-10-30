@@ -1110,6 +1110,7 @@ class DocumentAdmin(ObjectActionsMixin, GenoBaseAdmin):
     fields = [
         "name",
         "doctype",
+        "resident_visible",
         "data",
         "content_type",
         "comment",
@@ -1124,10 +1125,20 @@ class DocumentAdmin(ObjectActionsMixin, GenoBaseAdmin):
         "links",
         "backlinks",
     ]
-    list_display = ["name", "doctype", "content_type", "ts_created", "ts_modified"]
+    list_display = ["name", "doctype", "resident_visible", "content_type", "ts_created", "ts_modified"]
     search_fields = ["name", "comment"]
-    list_filter = ["doctype", "ts_created", "ts_modified", "content_type"]
+    list_filter = ["resident_visible", "doctype", "ts_created", "ts_modified", "content_type"]
     autocomplete_fields = ["doctype"]
+
+    def save_model(self, request, obj, form, change):
+        # Publishing document metadata is an explicit administrative action.
+        # It must remain limited to superusers until a dedicated approval role
+        # and privacy review workflow are implemented.
+        if obj.resident_visible and not request.user.is_superuser:
+            raise forms.ValidationError(
+                "Only a superuser may mark a document as resident-visible."
+            )
+        super().save_model(request, obj, form, change)
 
 
 class BankAccountForm(forms.ModelForm):
