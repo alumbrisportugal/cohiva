@@ -72,3 +72,15 @@
   bank details and unrelated tenant records remain excluded.
 - This is not an accounting statement, tax receipt, file downloader, payment
   portal, or completed frontend dashboard.
+
+## Paginated portal sections (development branch)
+- `GET /api/v1/geno/resident-portfolio/sections/<section>/?page=1`
+  provides a 25-row page for each of the seven explicit collection names.
+- Section names: `current-contracts`, `historical-contracts`,
+  `current-units`, `current-invoices`, `historical-invoices`,
+  `current-documents`, `historical-documents`.
+- Responses contain `section`, `page`, `page_size`, `total`,
+  `has_next`, `items`; invalid page parameters receive HTTP 400.
+- Each section delegates access filtering and response projection to the
+  existing tenant-scoped viewset and resident serializer.
+- Not a file download endpoint, payment provider, or legal tax receipt.
