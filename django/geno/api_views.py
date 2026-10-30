@@ -130,6 +130,50 @@ class ContractViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
+class ResidentContractHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Former tenants may read only the headers of their own ended contracts."""
+
+    queryset = Contract.objects.filter(
+        state__in=("unterzeichnet", "gekuendigt"),
+        date_end__isnull=False,
+        main_contract=None,
+    )
+    serializer_class = ResidentContractSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().filter(date_end__lt=timezone.localdate())
+        if self.request.user.is_staff:
+            return queryset
+        return queryset.filter(contractors__user=self.request.user).distinct()
+
+
+class ResidentOverviewView(APIView):
+    """Privacy-limited dashboard counters built from the resident APIs.
+
+    No financial totals or personally identifying co-tenant data are returned.
+    Counts share exactly the same authorization queries as list/detail routes.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        def visible_count(viewset_class):
+            viewset = viewset_class()
+            viewset.request = request
+            return viewset.get_queryset().count()
+
+        return Response({
+            "current_contracts": visible_count(ContractViewSet),
+            "historical_contracts": visible_count(ResidentContractHistoryViewSet),
+            "current_units": visible_count(RentalUnitViewSet),
+            "current_invoices": visible_count(ResidentInvoiceViewSet),
+            "historical_invoices": visible_count(ResidentInvoiceHistoryViewSet),
+            "current_documents": visible_count(ResidentContractDocumentViewSet),
+            "historical_documents": visible_count(ResidentContractDocumentHistoryViewSet),
+        })
+
+
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
 
