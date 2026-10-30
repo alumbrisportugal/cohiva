@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.db.models import Q, Sum
+from django.utils import timezone
 from django.http import FileResponse
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import ValidationError
@@ -71,18 +72,33 @@ class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ContractViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint that allows active contracts to be viewed (excluding subcontracts).
+    """Read-only contracts visible to staff or a current signed contractor.
+
+    Filtering is server-side and applies to both list and detail actions.
+    A resident cannot enumerate a former tenant's or another unit's records.
     """
 
-    queryset = Contract.objects.filter(state__in=("unterzeichnet", "gekuendigt")).filter(
-        main_contract=None
-    )
     serializer_class = ContractSerializer
-    # Contracts contain sensitive personal and financial information. Until
-    # object-level tenancy access is implemented and tested, only staff may list
-    # or retrieve them. IsAdminUser additionally requires authentication.
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = Contract.objects.filter(
+        state__in=("unterzeichnet", "gekuendigt"), main_contract=None
+    )
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff:
+            return queryset
+        today = timezone.localdate()
+        return (
+            queryset.filter(
+                state="unterzeichnet",
+                date__lte=today,
+                contractors__user=user,
+            )
+            .filter(Q(date_end__isnull=True) | Q(date_end__gte=today))
+            .distinct()
+        )
 
 
 class Akonto(APIView):
