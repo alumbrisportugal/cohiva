@@ -395,6 +395,8 @@ class ResidentMaintenanceRequestViewSet(viewsets.ModelViewSet):
         return queryset.filter(resident=self.request.user)
 
     def perform_create(self, serializer):
+        if self.request.user.is_staff:
+            raise ValidationError({"detail": "A equipa administrativa deve gerir pedidos existentes."})
         unit = serializer.validated_data["rental_unit"]
         current_units = RentalUnitViewSet()
         current_units.request = self.request
