@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceViewSet
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Invoice, InvoiceCategory
 
@@ -590,3 +590,72 @@ class AlumbrisResidentInvoiceAPITest(GenoAdminTestCase):
             {"id", "contract", "name", "date", "amount", "year", "month"},
         )
         self.assertNotIn("fin_transaction_ref", response.data)
+
+
+class AlumbrisFormerTenantInvoiceHistoryAPITest(GenoAdminTestCase):
+    """Old occupants keep only period-bound invoice summaries of their contract."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.former = get_user_model().objects.create_user(username="alumbris_former")
+        cls.successor = get_user_model().objects.create_user(username="alumbris_successor")
+        cls.addresses[0].user = cls.former
+        cls.addresses[0].save(update_fields=["user"])
+        cls.addresses[2].user = cls.successor
+        cls.addresses[2].save(update_fields=["user"])
+        cls.old_contract = Contract.objects.create(
+            state="gekuendigt",
+            date=datetime.date(2024, 1, 1),
+            date_end=datetime.date(2025, 12, 31),
+        )
+        cls.old_contract.contractors.add(cls.addresses[0])
+        cls.old_contract.rental_units.add(cls.rentalunits[2])
+        cls.new_contract = Contract.objects.create(
+            state="unterzeichnet",
+            date=datetime.date(2026, 1, 1),
+        )
+        cls.new_contract.contractors.add(cls.addresses[2])
+        cls.new_contract.rental_units.add(cls.rentalunits[2])
+        category = InvoiceCategory.objects.get(name="Mietzins wiederkehrend")
+        cls.old_invoice = Invoice.objects.create(
+            name="Historical rent",
+            date=datetime.date(2025, 11, 1), amount=650,
+            contract=cls.old_contract, invoice_category=category,
+        )
+        cls.successor_invoice = Invoice.objects.create(
+            name="New resident rent",
+            date=datetime.date(2026, 8, 1), amount=700,
+            contract=cls.new_contract, invoice_category=category,
+        )
+        cls.out_of_period = Invoice.objects.create(
+            name="Outside contractual period",
+            date=datetime.date(2026, 1, 1), amount=650,
+            contract=cls.old_contract, invoice_category=category,
+        )
+
+    def call(self, user, pk=None):
+        view = ResidentInvoiceHistoryViewSet.as_view(
+            {"get": "retrieve" if pk is not None else "list"}
+        )
+        request = APIRequestFactory().get("/api/v1/geno/resident-invoice-history/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return view(request, pk=pk) if pk is not None else view(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_former_tenant_sees_only_owned_historical_period(self):
+        result = self.call(self.former)
+        self.assertEqual(result.status_code, 200)
+        ids = {entry["id"] for entry in result.data["results"]}
+        self.assertIn(self.old_invoice.id, ids)
+        self.assertNotIn(self.successor_invoice.id, ids)
+        self.assertNotIn(self.out_of_period.id, ids)
+        self.assertEqual(self.call(self.former, self.successor_invoice.id).status_code, 404)
+        self.assertEqual(self.call(self.former, self.out_of_period.id).status_code, 404)
+
+    def test_successor_cannot_read_predecessor_history(self):
+        self.assertEqual(self.call(self.successor, self.old_invoice.id).status_code, 404)
