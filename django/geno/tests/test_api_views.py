@@ -1249,8 +1249,10 @@ class AlumbrisResidentPortalPageTest(GenoAdminTestCase):
     """HTML portal requires login and never embeds raw tenancy data."""
 
     def test_anonymous_redirected_to_login(self):
+        self.client.logout()
         response = self.client.get(reverse("geno:resident-portal"))
         self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response["Location"])
 
     def test_authenticated_resident_can_open_portal(self):
         user = get_user_model().objects.create_user(username="alumbris_page_visitor")
@@ -1270,3 +1272,16 @@ class AlumbrisResidentPortalPageTest(GenoAdminTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b"private_document_data", response.content)
         self.assertNotIn(b"resident_visible", response.content)
+
+    def test_portal_has_safe_rendering_and_pagination_controls(self):
+        user = get_user_model().objects.create_user(username="alumbris_portal_controls")
+        self.client.force_login(user)
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(response.status_code, 200)
+        markup = response.content.decode()
+        self.assertIn('textContent', markup)
+        self.assertIn('aria-live', markup)
+        self.assertIn('id="previous"', markup)
+        self.assertIn('id="next"', markup)
+        self.assertIn('credentials:"same-origin"', markup)
+        self.assertNotIn('innerHTML', markup)
