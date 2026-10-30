@@ -9,6 +9,7 @@ router = routers.DefaultRouter()
 router.register(r"rentalunit", views.RentalUnitViewSet)
 router.register(r"contract", views.ContractViewSet)
 router.register(r"resident-invoice", views.ResidentInvoiceViewSet, basename="resident-invoice")
+router.register(r"resident-invoice-history", views.ResidentInvoiceHistoryViewSet, basename="resident-invoice-history")
 
 urlpatterns = [
     ## API endpoints
