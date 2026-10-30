@@ -155,3 +155,14 @@
 - Django admin staff triage now lists/searches requests, permits status
   updates, and locks resident-submitted identity, unit and description.
   Admin cannot add or delete requests. Staff read access via API is tested.
+
+## Maintenance portal integration (experimental)
+- The pt-PT resident HTML portal now provides a repair submission form and
+  an individual list of submitted tickets. Rental units come from the same
+  authenticated tenant-scoped API used elsewhere in the portal.
+- Django sets a CSRF cookie when serving the authenticated page; the form
+  submits authenticated JSON POST requests with the token. No token or
+  database data is embedded into the static JavaScript.
+- The UI does not yet provide photo attachments, staff messaging, live updates,
+  scheduling, or push/email notifications. Browser and Synology staging
+  acceptance tests are still required.
