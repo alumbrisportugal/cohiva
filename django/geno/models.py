@@ -2551,6 +2551,7 @@ class ResidentMaintenanceRequest(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    ts_modified = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("-created_at", "-pk")
