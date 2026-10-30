@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.http import FileResponse
-from django.test import tag
+from django.test import override_settings, tag
 from django.urls import reverse
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -661,6 +661,7 @@ class AlumbrisFormerTenantInvoiceHistoryAPITest(GenoAdminTestCase):
         self.assertEqual(self.call(self.successor, self.old_invoice.id).status_code, 404)
 
 
+@override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_test_contract_doc",))
 class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
     """A tenant only sees contract-linked document titles, never data blobs."""
 
@@ -712,6 +713,7 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
         self.assertNotIn("data", detail.data)
 
 
+@override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_old_contract_doc",))
 class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
     """Metadata for previous tenancy does not cross into the successor's contract."""
 
