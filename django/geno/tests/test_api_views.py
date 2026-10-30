@@ -1017,7 +1017,7 @@ class AlumbrisResidentPortfolioIntegrationTest(GenoAdminTestCase):
         self.assertNotIn("data", docs["items"][0])
         self.assertNotIn("template", docs["items"][0])
         self.assertNotIn("comment", docs["items"][0])
-        self.assertNotIn(str(self.private_doc.pk), str(docs["items"]))
+        self.assertNotIn(self.private_doc.pk, [row["id"] for row in docs["items"]])
         self.assertEqual(
             set(response.data),
             {"current_contracts", "historical_contracts", "current_units",
@@ -1026,7 +1026,7 @@ class AlumbrisResidentPortfolioIntegrationTest(GenoAdminTestCase):
         )
         for section in response.data.values():
             self.assertEqual(set(section), {"total", "items", "truncated"})
-            self.assertEqual(section["total"] >= len(section["items"]), True)
+            self.assertGreaterEqual(section["total"], len(section["items"]))
             self.assertEqual(section["truncated"], section["total"] > 50)
 
     @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_portfolio_test",))
