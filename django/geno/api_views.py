@@ -174,6 +174,42 @@ class ResidentOverviewView(APIView):
         })
 
 
+class ResidentPortfolioView(APIView):
+    """Bounded, read-only portal snapshot with object-scoped resident records.
+
+    This is intentionally separate from payment processing or official
+    Portuguese fiscal documents. Each collection reuses the corresponding
+    list/detail authorization query; no arbitrary object IDs are accepted.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    MAX_ITEMS_PER_SECTION = 50
+
+    def get(self, request):
+        sections = (
+            ("current_contracts", ContractViewSet, ResidentContractSerializer),
+            ("historical_contracts", ResidentContractHistoryViewSet, ResidentContractSerializer),
+            ("current_units", RentalUnitViewSet, ResidentRentalUnitSerializer),
+            ("current_invoices", ResidentInvoiceViewSet, ResidentInvoiceSerializer),
+            ("historical_invoices", ResidentInvoiceHistoryViewSet, ResidentInvoiceSerializer),
+            ("current_documents", ResidentContractDocumentViewSet, ResidentContractDocumentSerializer),
+            ("historical_documents", ResidentContractDocumentHistoryViewSet, ResidentContractDocumentSerializer),
+        )
+        payload = {}
+        for key, viewset_class, serializer_class in sections:
+            viewset = viewset_class()
+            viewset.request = request
+            queryset = viewset.get_queryset().order_by("pk")
+            payload[key] = {
+                "total": queryset.count(),
+                "items": serializer_class(
+                    queryset[:self.MAX_ITEMS_PER_SECTION], many=True,
+                ).data,
+                "truncated": queryset.count() > self.MAX_ITEMS_PER_SECTION,
+            }
+        return Response(payload)
+
+
 class ResidentInvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """Tenant-owned invoice summaries; no historic or cross-tenant access yet."""
 
