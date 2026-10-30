@@ -20,5 +20,18 @@ class LegacyDocumentRouteTests(unittest.TestCase):
         self.assertIn('pk=obj_id, doctype=doctype_obj', block)
 
 
+    def test_only_superusers_may_publish_document_metadata(self):
+        admin_source = (
+            Path(__file__).resolve().parents[2] / "django" / "geno" / "admin.py"
+        ).read_text(encoding="utf-8")
+        block = admin_source.split("class DocumentAdmin(")[1].split(
+            "class BankAccountForm("
+        )[0]
+        self.assertIn('"resident_visible"', block)
+        self.assertIn("def get_readonly_fields(", block)
+        self.assertIn("if not request.user.is_superuser:", block)
+        self.assertIn("raise PermissionDenied(", block)
+
+
 if __name__ == "__main__":
     unittest.main()
