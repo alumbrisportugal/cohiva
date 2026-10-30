@@ -172,6 +172,7 @@ class ResidentOverviewView(APIView):
             "historical_invoices": visible_count(ResidentInvoiceHistoryViewSet),
             "current_documents": visible_count(ResidentContractDocumentViewSet),
             "historical_documents": visible_count(ResidentContractDocumentHistoryViewSet),
+            "maintenance_requests": visible_count(ResidentMaintenanceRequestViewSet),
         })
 
 
