@@ -1341,6 +1341,20 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         ticket = ResidentMaintenanceRequest.objects.get(pk=pk)
         self.assertEqual(ticket.resident, self.tenant)
 
+    def test_resident_cannot_impersonate_another_ticket_owner(self):
+        response = self.call(self.tenant, "post", {
+            "rental_unit": self.rentalunits[0].pk,
+            "resident": self.other.pk,
+            "title": "Problema de canalização",
+            "description": "Há uma fuga de água na canalização da cozinha.",
+            "status": "closed",
+        })
+        self.assertEqual(response.status_code, 201)
+        ticket = ResidentMaintenanceRequest.objects.get(pk=response.data["id"])
+        self.assertEqual(ticket.resident_id, self.tenant.pk)
+        self.assertEqual(ticket.status, "open")
+        self.assertEqual(self.call(self.other, pk=ticket.pk).status_code, 404)
+
     def test_unrelated_rental_unit_and_short_description_rejected(self):
         for unit in (self.rentalunits[3].pk,):
             response = self.call(self.tenant, "post", {
