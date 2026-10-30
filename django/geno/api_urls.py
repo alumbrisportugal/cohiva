@@ -21,4 +21,5 @@ urlpatterns = [
     path("akonto/", views.Akonto.as_view()),
     path("capabilities/", views.CapabilitiesView.as_view()),
     path("resident-overview/", views.ResidentOverviewView.as_view(), name="resident-overview"),
+    path("resident-portfolio/", views.ResidentPortfolioView.as_view(), name="resident-portfolio"),
 ]
