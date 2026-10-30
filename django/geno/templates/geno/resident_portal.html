@@ -41,6 +41,7 @@ button[aria-pressed=true]{background:#17324b;color:white}button:disabled{opacity
 "use strict";
 (() => {
 const base = "{{ portal_api_base|escapejs }}";
+const labels = {state:"Estado",date:"Data",date_end:"Fim",year:"Ano",month:"Mês",amount:"Valor",floor:"Piso",area:"Área",ts_created:"Criado"};
 const categories = [
 ["current-contracts","Contratos atuais"],["historical-contracts","Contratos anteriores"],
 ["current-units","Frações"],["current-invoices","Faturas"],
@@ -67,7 +68,7 @@ function displayRecord(record) {
  item.append(element("strong",title));
  const meta = [];
  for(const key of ["state","date","date_end","year","month","amount","floor","area","ts_created"]){
-  if(record[key] !== undefined && record[key] !== null) meta.push(key+": "+record[key]);
+  if(record[key] !== undefined && record[key] !== null) meta.push(labels[key]+": "+record[key]);
  }
  if(meta.length) item.append(element("div",meta.join(" · "),"muted"));
  return item;
@@ -87,7 +88,9 @@ async function refreshSection(){
  if(loading)return;
  loading=true;status.textContent="A carregar registos…";error.hidden=true;
  try{
- const data=await json("resident-portfolio/sections/"+encodeURIComponent(current)+"/?page="+page);
+ const expectedSection = current, expectedPage = page;
+ const data=await json("resident-portfolio/sections/"+encodeURIComponent(expectedSection)+"/?page="+expectedPage);
+ if (current !== expectedSection || page !== expectedPage) return;
  const target=byId("entries");target.replaceChildren();
  if(data.items.length) for(const record of data.items) target.append(displayRecord(record));
  else target.append(element("p","Sem registos nesta categoria.","muted"));
