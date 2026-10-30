@@ -108,3 +108,13 @@
 - The timeline accepts inclusive ISO dates `from_date=YYYY-MM-DD` and
   `to_date=YYYY-MM-DD` for event filtering, applied to the authorized
   queryset before the 30-row cap. Malformed or reversed date ranges return 400.
+
+## Authenticated portal capability negotiation
+- `GET /api/v1/geno/resident-capabilities/` describes enabled read-only
+  routes, the seven portfolio sections and pagination limits, timeline event
+  categories and date filters; no tenant data or admin configuration.
+- Explicitly advertises `document_download=false`,
+  `online_payments=false`, and `official_pt_tax_receipts=false` until
+  those services are implemented, tested and homologated.
+- Timeline rejects repeated scalar date parameters and excessive category
+  selections with HTTP 400 to avoid ambiguous filters.
