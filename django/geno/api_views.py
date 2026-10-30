@@ -197,6 +197,7 @@ class ResidentContractDocumentViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.filter(
             object_id__in=Contract.objects.filter(
                 Q(date_end__isnull=True) | Q(date_end__gte=today),
+                active=True,
                 state="unterzeichnet",
                 date__lte=today,
                 contractors__user=user,
