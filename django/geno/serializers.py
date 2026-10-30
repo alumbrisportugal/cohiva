@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import Contract, Document, Invoice, RentalUnit, ResidentMaintenanceRequest
+from .models import Contract, Document, Invoice, RentalUnit, ResidentMaintenanceRequest, ResidentMaintenanceComment
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -151,4 +151,17 @@ class ResidentMaintenanceRequestSerializer(serializers.ModelSerializer):
         value = value.strip()
         if len(value) < 10:
             raise serializers.ValidationError("Descreve o problema com pelo menos 10 caracteres.")
+        return value
+
+
+class ResidentMaintenanceCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResidentMaintenanceComment
+        fields = ("id", "ticket", "author", "message", "created_at")
+        read_only_fields = ("id", "author", "created_at")
+
+    def validate_message(self, value):
+        value = value.strip()
+        if len(value) < 2:
+            raise serializers.ValidationError("Escreve uma mensagem com pelo menos dois caracteres.")
         return value
