@@ -228,9 +228,14 @@ def documents(request, doctype, obj_id, action):
             template = doctype_obj.templates.get(pk=template_pk)
             data = get_context_data(doctype, obj_id, {})
         elif action == "download":
-            if not request.user.has_perm("geno.regenerate_document"):
+            # Regeneration reveals stored document context and personal data.
+            # Keep this legacy admin route closed to resident accounts until
+            # document ownership checks are implemented for a separate API.
+            if not request.user.is_staff or not request.user.has_perm("geno.regenerate_document"):
                 return unauthorized(request)
-            doc = Document.objects.select_related("template").get(pk=obj_id)
+            doc = Document.objects.select_related("template").get(
+                pk=obj_id, doctype=doctype_obj
+            )
             template = doc.template or doctype_obj.templates.filter(active=True).first()
             if not template:
                 raise RuntimeError("Vorlage nicht gefunden.")
