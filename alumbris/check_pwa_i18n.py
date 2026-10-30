@@ -14,7 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1] / "pwa" / "src" / "i18n"
 BASE = ROOT / "en-US" / "index.ts"
 TARGET = ROOT / "pt-PT" / "index.ts"
 # The catalog follows a nested object literal with literal string values.
-KEY = re.compile(r"^\s*([A-Za-z][A-Za-z0-9]*):\s*(?:'|\"|$)")
+KEY = re.compile(r"^\s*([A-Za-z][A-Za-z0-9]*):\s*(?:\{|'|\"|$)")
 PLACEHOLDER = re.compile(r"\{[A-Za-z_][A-Za-z_0-9]*\}")
 
 
