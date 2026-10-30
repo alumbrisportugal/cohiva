@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib import admin as django_admin
+from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.test import RequestFactory
 
@@ -16,6 +18,8 @@ from geno.models import (
     Child,
     ContentTemplate,
     Contract,
+    Document,
+    DocumentType,
     GenericAttribute,
     Member,
     RentalUnit,
@@ -1034,3 +1038,56 @@ class TenantsViewAdminTest(GenoAdminTestCase):
         results = self._get_results_for_contract(contract.id, {"active__exact": "all"})
         self.assertEqual(len(results), 1)
         self.assertFalse(results[0].active)
+
+
+class AlumbrisDocumentVisibilityAdminTest(GenoAdminTestCase):
+    """Verify backend enforcement, not just read-only admin form cosmetics."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.staff = get_user_model().objects.create_user(
+            username="alumbris_documents_staff", is_staff=True
+        )
+        cls.superuser = get_user_model().objects.get(username="superuser")
+        cls.document_type = DocumentType.objects.create(
+            name="alumbris_doc_visibility_test",
+            description="Test document permissions",
+        )
+        cls.document = Document.objects.create(
+            name="Private document",
+            doctype=cls.document_type,
+            data="{}",
+            content_object=cls.addresses[0],
+        )
+
+    def setUp(self):
+        self.admin = admin.DocumentAdmin(Document, django_admin.site)
+        self.request = RequestFactory().post("/admin/geno/document/")
+
+    def test_staff_cannot_change_document_visibility(self):
+        self.request.user = self.staff
+        self.assertIn(
+            "resident_visible",
+            self.admin.get_readonly_fields(self.request, self.document),
+        )
+        self.document.resident_visible = True
+        with self.assertRaises(PermissionDenied):
+            self.admin.save_model(self.request, self.document, None, True)
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.resident_visible)
+
+    def test_superuser_can_publish_and_revoke(self):
+        self.request.user = self.superuser
+        self.assertNotIn(
+            "resident_visible",
+            self.admin.get_readonly_fields(self.request, self.document),
+        )
+        self.document.resident_visible = True
+        self.admin.save_model(self.request, self.document, None, True)
+        self.document.refresh_from_db()
+        self.assertTrue(self.document.resident_visible)
+        self.document.resident_visible = False
+        self.admin.save_model(self.request, self.document, None, True)
+        self.document.refresh_from_db()
+        self.assertFalse(self.document.resident_visible)
