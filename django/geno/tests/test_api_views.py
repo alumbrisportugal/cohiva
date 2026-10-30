@@ -1187,3 +1187,22 @@ class AlumbrisResidentTimelineTest(GenoAdminTestCase):
         self.visible.save(update_fields=["resident_visible"])
         result = self.call(self.tenant, {"kind": "document"})
         self.assertEqual(result.data["events"], [])
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_timeline_document",))
+    def test_date_range_filters_documents_on_database_side(self):
+        today = datetime.date.today().isoformat()
+        same_day = self.call(self.tenant, {"kind": "document", "from_date": today, "to_date": today})
+        self.assertEqual(same_day.status_code, 200)
+        self.assertIn(self.visible.pk, [item["id"] for item in same_day.data["events"]])
+        old = self.call(self.tenant, {"kind": "document", "to_date": "2020-01-01"})
+        self.assertEqual(old.status_code, 200)
+        self.assertEqual(old.data["events"], [])
+
+    def test_invalid_date_range_inputs_rejected(self):
+        for params in (
+            {"from_date": "2020-99-99"},
+            {"to_date": "../"},
+            {"from_date": "2025-01-02", "to_date": "2025-01-01"},
+            {"from_date": "2025-1-1"},
+        ):
+            self.assertEqual(self.call(self.tenant, params).status_code, 400)
