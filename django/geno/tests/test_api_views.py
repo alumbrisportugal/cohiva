@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView, ResidentTimelineView, ResidentCapabilitiesView
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -1215,3 +1215,31 @@ class AlumbrisResidentTimelineTest(GenoAdminTestCase):
             {"from_date": "2025-1-1"},
         ):
             self.assertEqual(self.call(self.tenant, params).status_code, 400)
+
+
+class AlumbrisResidentCapabilitiesTest(GenoAdminTestCase):
+    """Feature discovery is authenticated and explicitly read-only."""
+
+    def call(self, user):
+        request = APIRequestFactory().get("/api/v1/geno/resident-capabilities/")
+        if user is not None:
+            force_authenticate(request, user=user)
+        return ResidentCapabilitiesView.as_view()(request)
+
+    def test_anonymous_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+
+    def test_capabilities_do_not_advertise_unimplemented_services(self):
+        tenant = get_user_model().objects.create_user(username="alumbris_capabilities_tenant")
+        result = self.call(tenant)
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(result.data["read_only"])
+        self.assertEqual(result.data["portfolio"]["page_size"], 25)
+        self.assertEqual(result.data["timeline"]["max_events"], 30)
+        self.assertFalse(result.data["document_download"])
+        self.assertFalse(result.data["online_payments"])
+        self.assertFalse(result.data["official_pt_tax_receipts"])
+        self.assertEqual(len(result.data["portfolio"]["sections"]), 7)
+        self.assertEqual(len(result.data["timeline"]["kinds"]), 4)
+        self.assertNotIn("tenant", str(result.data))
+        self.assertNotIn("password", str(result.data))
