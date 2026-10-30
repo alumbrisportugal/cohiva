@@ -104,3 +104,7 @@
 - Unrecognized groups are rejected with HTTP 400, never silently converted
   into unrestricted access. Without `kind`, all four permitted groups apply.
 - The API remains capped at 30 events with no raw document or financial data.
+
+- The timeline accepts inclusive ISO dates `from_date=YYYY-MM-DD` and
+  `to_date=YYYY-MM-DD` for event filtering, applied to the authorized
+  queryset before the 30-row cap. Malformed or reversed date ranges return 400.
