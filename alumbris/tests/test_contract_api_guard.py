@@ -19,12 +19,29 @@ def viewset_body(code, name):
 class SensitiveAPIProtectionTests(unittest.TestCase):
     def test_administrative_viewsets_restrict_to_staff(self):
         code = SOURCE.read_text(encoding="utf-8")
-        for name in ("UserViewSet", "GroupViewSet", "RentalUnitViewSet"):
+        for name in ("UserViewSet", "GroupViewSet"):
             with self.subTest(viewset=name):
                 body = viewset_body(code, name)
                 self.assertRegex(
                     body, r"(?m)^\s+permission_classes\s*=\s*\[permissions\.IsAdminUser\]"
                 )
+
+    def test_rental_units_are_tenant_scoped(self):
+        code = SOURCE.read_text(encoding="utf-8")
+        body = viewset_body(code, "RentalUnitViewSet")
+        self.assertIn("permission_classes = [permissions.IsAuthenticated]", body)
+        for required in (
+            "def get_queryset(self):",
+            "if user.is_staff:",
+            "rentalunit_contracts__contractors__user=user",
+            'rentalunit_contracts__state="unterzeichnet"',
+            "rentalunit_contracts__date__lte=today",
+            "rentalunit_contracts__date_end__gte=today",
+            "rentalunit_contracts__date_end__isnull=True",
+            ".distinct()",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, body)
 
     def test_contracts_restricted_to_authenticated_current_contractors(self):
         code = SOURCE.read_text(encoding="utf-8")
