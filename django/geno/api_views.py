@@ -44,7 +44,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Restricted until fine-grained object-level permissions are verified.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -54,7 +55,8 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Restricted until fine-grained object-level permissions are verified.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
@@ -64,7 +66,8 @@ class RentalUnitViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = RentalUnit.objects.filter(active=True)
     serializer_class = RentalUnitSerializer
-    # permission_classes = [permissions.IsAuthenticated]
+    # Restricted until fine-grained object-level permissions are verified.
+    permission_classes = [permissions.IsAdminUser]
 
 
 class ContractViewSet(viewsets.ReadOnlyModelViewSet):
