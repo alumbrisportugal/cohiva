@@ -28,9 +28,15 @@ def can_access_contract(
     endpoint must additionally verify that its target object belongs to that
     contract and that the operation is permitted for the requested document.
     """
-    if person_id is None or isinstance(person_id, bool) or person_id <= 0:
+    if type(person_id) is not int or person_id <= 0:
         return False
-    if requested_unit_id <= 0 or isinstance(requested_unit_id, bool):
+    if type(requested_unit_id) is not int or requested_unit_id <= 0:
+        return False
+    if not isinstance(contractor_ids, (set, frozenset)) or not isinstance(unit_ids, (set, frozenset)):
+        return False
+    if not all(type(member) is int and member > 0 for member in contractor_ids):
+        return False
+    if not all(type(unit) is int and unit > 0 for unit in unit_ids):
         return False
     if person_id not in contractor_ids or requested_unit_id not in unit_ids:
         return False
