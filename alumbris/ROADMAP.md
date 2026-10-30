@@ -94,3 +94,13 @@
   removes documents from the timeline immediately.
 - Not an accounting ledger, evidence of payment, official receipt, or
   downloadable document archive. All changes remain in PR draft.
+
+## Timeline category selection and input hardening
+- `GET /api/v1/geno/resident-timeline/?kind=document` restricts the feed
+  to published, tenant-authorized current contract documents.
+- Repeat `kind` for multiple groups, e.g.
+  `?kind=invoice&kind=historical_invoice`. Permitted groups:
+  `invoice`, `historical_invoice`, `document`, `historical_document`.
+- Unrecognized groups are rejected with HTTP 400, never silently converted
+  into unrestricted access. Without `kind`, all four permitted groups apply.
+- The API remains capped at 30 events with no raw document or financial data.
