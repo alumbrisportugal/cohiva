@@ -400,6 +400,28 @@ class AlumbrisResidentContractAPITest(GenoAdminTestCase):
         self.assertEqual(self.call(self.resident, self.elsewhere_contract.id).status_code, 404)
         self.assertEqual(self.call(self.resident, self.future_contract.id).status_code, 404)
 
+    def test_expired_and_cancelled_contracts_not_exposed(self):
+        old = Contract.objects.create(
+            state="unterzeichnet",
+            date=datetime.date(2024, 1, 1),
+            date_end=datetime.date.today() - datetime.timedelta(days=1),
+        )
+        old.contractors.add(self.addresses[0])
+        old.rental_units.add(self.rentalunits[4])
+        cancelled = Contract.objects.create(
+            state="gekuendigt",
+            date=datetime.date.today() - datetime.timedelta(days=5),
+            date_end=datetime.date.today() + datetime.timedelta(days=5),
+        )
+        cancelled.contractors.add(self.addresses[0])
+        cancelled.rental_units.add(self.rentalunits[5])
+        result = self.call(self.resident)
+        ids = {entry["id"] for entry in result.data["results"]}
+        self.assertNotIn(old.id, ids)
+        self.assertNotIn(cancelled.id, ids)
+        self.assertEqual(self.call(self.resident, old.id).status_code, 404)
+        self.assertEqual(self.call(self.resident, cancelled.id).status_code, 404)
+
     def test_stranger_has_no_contracts(self):
         response = self.call(self.stranger)
         self.assertEqual(response.status_code, 200)
