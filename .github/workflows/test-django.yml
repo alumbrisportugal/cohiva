@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted] # uses your self-hosted runner pool
+    runs-on: ubuntu-latest # isolated GitHub-hosted runner; no NAS dependency
 
     services:
       mariadb:
