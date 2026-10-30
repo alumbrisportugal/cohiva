@@ -60,3 +60,15 @@
   (original parties only, ended signed/terminated state, no void contracts).
 - These views are not a Portuguese tax-compliant payment/receipt module.
   The portal remains read-only; full user experience and privacy review pending.
+
+## Resident portfolio snapshot (development branch)
+- `GET /api/v1/geno/resident-portfolio/`: seven independent object collections
+  with `{total, items, truncated}` per section.
+- Every collection reuses its existing read-only, authenticated resident
+  queryset and restricted serializer; no independent authorization path.
+- Each section is capped at 50 rows, ordered by database primary key;
+  `truncated=true` indicates the client must use its paginated detail route.
+- Sensitive administrative notes, raw document contexts, template paths,
+  bank details and unrelated tenant records remain excluded.
+- This is not an accounting statement, tax receipt, file downloader, payment
+  portal, or completed frontend dashboard.
