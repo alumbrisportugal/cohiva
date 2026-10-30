@@ -10,7 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 import geno.tests.data as geno_testdata
 from finance.accounting import Account, AccountingManager, AccountKey
-from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView
+from geno.api_views import Akonto, ContractViewSet, QRBill, RentalUnitViewSet, ResidentInvoiceHistoryViewSet, ResidentInvoiceViewSet, ResidentContractDocumentViewSet, ResidentContractDocumentHistoryViewSet, ResidentContractHistoryViewSet, ResidentOverviewView, ResidentPortfolioView, ResidentPortfolioSectionView
 from geno.billing import get_income_account, get_receivables_account
 from geno.models import Contract, Document, DocumentType, Invoice, InvoiceCategory
 
@@ -1049,3 +1049,58 @@ class AlumbrisResidentPortfolioIntegrationTest(GenoAdminTestCase):
         contracts = result.data["current_contracts"]
         self.assertLessEqual(len(contracts["items"]), 1)
         self.assertEqual(contracts["truncated"], contracts["total"] > 1)
+
+
+class AlumbrisResidentPortfolioPaginationTest(GenoAdminTestCase):
+    """The seven page endpoints must share tenant authorization."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        geno_testdata.create_contracts(cls)
+        cls.tenant = get_user_model().objects.create_user(username="alumbris_paginated_tenant")
+        cls.stranger = get_user_model().objects.create_user(username="alumbris_paginated_stranger")
+        cls.addresses[0].user = cls.tenant
+        cls.addresses[0].save(update_fields=["user"])
+        cls.type = DocumentType.objects.create(name="alumbris_page_test")
+        cls.doc = Document.objects.create(
+            name="Available metadata", data='{"secret":"hidden"}',
+            resident_visible=True, doctype=cls.type,
+            content_object=cls.contracts[0],
+        )
+
+    def call(self, user, section="current-documents", page="1"):
+        request = APIRequestFactory().get(
+            "/api/v1/geno/resident-portfolio/sections/" + section + "/",
+            {"page": page},
+        )
+        if user is not None:
+            force_authenticate(request, user=user)
+        return ResidentPortfolioSectionView.as_view()(request, section=section)
+
+    def test_anonymous_and_unknown_sections_denied(self):
+        self.assertIn(self.call(None).status_code, (401, 403))
+        self.assertEqual(self.call(self.tenant, section="admin-invoices").status_code, 404)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_page_test",))
+    def test_page_one_exposes_only_authorized_metadata(self):
+        owned = self.call(self.tenant)
+        self.assertEqual(owned.status_code, 200)
+        self.assertEqual(owned.data["total"], 1)
+        self.assertEqual(owned.data["items"][0]["id"], self.doc.pk)
+        self.assertEqual(set(owned.data["items"][0]), {"id", "name", "doctype", "ts_created"})
+        other = self.call(self.stranger)
+        self.assertEqual(other.status_code, 200)
+        self.assertEqual(other.data["total"], 0)
+
+    def test_invalid_page_values_rejected(self):
+        for value in ("0", "-1", "NaN", "10001", "9" * 500):
+            self.assertEqual(self.call(self.tenant, page=value).status_code, 400)
+
+    @override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=("alumbris_page_test",))
+    def test_revocation_and_out_of_range_page(self):
+        self.assertEqual(self.call(self.tenant, page="2").data["items"], [])
+        self.assertFalse(self.call(self.tenant, page="1").data["has_next"])
+        self.doc.resident_visible = False
+        self.doc.save(update_fields=["resident_visible"])
+        self.assertEqual(self.call(self.tenant).data["total"], 0)
