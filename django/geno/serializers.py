@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import Contract, Invoice, RentalUnit
+from .models import Contract, Document, Invoice, RentalUnit
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -120,4 +120,13 @@ class ResidentInvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = ["id", "contract", "name", "date", "amount", "year", "month"]
+        read_only_fields = fields
+
+
+class ResidentContractDocumentSerializer(serializers.ModelSerializer):
+    """Metadata only; document data and template are never included."""
+
+    class Meta:
+        model = Document
+        fields = ["id", "name", "doctype", "ts_created"]
         read_only_fields = fields
