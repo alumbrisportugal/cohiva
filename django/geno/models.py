@@ -2528,3 +2528,32 @@ class TenantsView(GenoBase):
                 name="unique_tenantsview_entry",
             ),
         ]
+
+
+class ResidentMaintenanceRequest(models.Model):
+    """Resident-created repair ticket; intentionally separate from Geno contracts."""
+
+    STATUS_CHOICES = (
+        ("open", "Aberto"),
+        ("in_progress", "Em tratamento"),
+        ("resolved", "Resolvido"),
+        ("closed", "Fechado"),
+    )
+    resident = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="alumbris_maintenance_requests",
+    )
+    rental_unit = models.ForeignKey(
+        RentalUnit, on_delete=models.PROTECT, related_name="alumbris_maintenance_requests",
+    )
+    title = models.CharField(max_length=140)
+    description = models.TextField(max_length=3000)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="open")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+
+    def __str__(self):
+        return self.title
