@@ -1273,6 +1273,18 @@ class AlumbrisResidentPortalPageTest(GenoAdminTestCase):
         self.assertNotIn(b"private_document_data", response.content)
         self.assertNotIn(b"resident_visible", response.content)
 
+    def test_portal_has_maintenance_form_and_csrf_cookie(self):
+        user = get_user_model().objects.create_user(username="alumbris_repair_page")
+        self.client.force_login(user)
+        response = self.client.get(reverse("geno:resident-portal"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="maintenance-form"')
+        self.assertContains(response, 'id="maintenance-unit"')
+        self.assertContains(response, 'id="maintenance-list"')
+        self.assertContains(response, 'resident-maintenance/')
+        self.assertContains(response, 'X-CSRFToken')
+        self.assertIn("csrftoken", response.cookies)
+
     def test_portal_has_safe_rendering_and_pagination_controls(self):
         user = get_user_model().objects.create_user(username="alumbris_portal_controls")
         self.client.force_login(user)
