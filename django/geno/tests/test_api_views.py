@@ -1341,6 +1341,17 @@ class AlumbrisResidentMaintenanceRequestTest(GenoAdminTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(ResidentMaintenanceRequest.objects.count(), 0)
 
+    def test_staff_can_read_ticket_but_cannot_create_through_adminless_api(self):
+        ticket = ResidentMaintenanceRequest.objects.create(
+            resident=self.tenant, rental_unit=self.rentalunits[0],
+            title="Avaria elétrica", description="O interruptor do corredor não funciona.",
+        )
+        staff = get_user_model().objects.create_user(
+            username="alumbris_maintenance_staff", is_staff=True,
+        )
+        self.assertEqual(self.call(staff, pk=ticket.pk).status_code, 200)
+        self.assertEqual(self.call(staff).data["count"], 1)
+
     def test_non_owner_cannot_update_existing_ticket(self):
         ticket = ResidentMaintenanceRequest.objects.create(
             resident=self.tenant, rental_unit=self.rentalunits[0],
