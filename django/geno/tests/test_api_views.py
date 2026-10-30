@@ -808,6 +808,22 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
         self.old_doc.save(update_fields=["resident_visible"])
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
 
+    def test_invalidated_historical_contract_is_not_accessible(self):
+        contract = self.old_doc.content_object
+        contract.state = "ungueltig"
+        contract.save(update_fields=["state"])
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
+
+    def test_document_type_revocation_immediately_blocks_historical_access(self):
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
+        with override_settings(ALUMBRIS_RESIDENT_DOCUMENT_TYPES=()):
+            self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
+
+    def test_reassignment_of_original_contract_party_blocks_history(self):
+        contract = self.old_doc.content_object
+        contract.contractors.remove(self.addresses[0])
+        self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
+
     def test_former_can_list_own_metadata_not_successor(self):
         response = self.call(self.former)
         self.assertEqual(response.status_code, 200)
