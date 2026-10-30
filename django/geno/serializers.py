@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import Contract, RentalUnit
+from .models import Contract, Invoice, RentalUnit
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -112,3 +112,12 @@ class ResidentContractSerializer(serializers.ModelSerializer):
         fields = [
             "id", "rental_units", "state", "date", "date_end",
         ]
+
+
+class ResidentInvoiceSerializer(serializers.ModelSerializer):
+    """Minimal invoice summary, not an official Portuguese tax receipt."""
+
+    class Meta:
+        model = Invoice
+        fields = ["id", "contract", "name", "date", "amount", "year", "month"]
+        read_only_fields = fields
