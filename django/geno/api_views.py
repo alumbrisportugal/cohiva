@@ -225,14 +225,13 @@ class ResidentContractDocumentHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         today = timezone.localdate()
         if user.is_staff:
             return queryset.filter(
-                object_id__in=Contract.objects.filter(active=True, date_end__lt=today).values("pk")
+                object_id__in=Contract.objects.filter(date_end__lt=today).values("pk")
             )
         # GenericForeignKey prevents a direct join to contract dates. Restrict
         # to the original contracting party and ended contracts server-side.
         # Historical downloads require a separate, stricter authorization path.
         return queryset.filter(
             object_id__in=Contract.objects.filter(
-                active=True,
                 state__in=("unterzeichnet", "gekuendigt"),
                 date_end__lt=today,
                 contractors__user=user,
