@@ -674,6 +674,7 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
         cls.addresses[0].user = cls.resident
         cls.addresses[0].save(update_fields=["user"])
         cls.type = DocumentType.objects.create(name="alumbris_test_contract_doc")
+        Contract.objects.filter(pk=cls.contracts[0].pk).update(active=True)
         cls.own = Document.objects.create(
             resident_visible=True,
             name="Own contract", doctype=cls.type, data='{"private":"never expose"}',
@@ -719,8 +720,7 @@ class AlumbrisContractDocumentMetadataTest(GenoAdminTestCase):
 
     def test_inactive_contract_hides_current_document(self):
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 200)
-        self.contracts[0].active = False
-        self.contracts[0].save(update_fields=["active"])
+        Contract.objects.filter(pk=self.contracts[0].pk).update(active=False)
         self.assertEqual(self.call(self.resident, self.own.id).status_code, 404)
 
     def test_revocation_immediately_removes_current_document(self):
@@ -761,6 +761,7 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
             date=datetime.date(2024, 1, 1),
             date_end=datetime.date(2025, 12, 31),
         )
+        Contract.objects.filter(pk=old.pk).update(active=True)
         old.contractors.add(cls.addresses[0])
         old.rental_units.add(cls.rentalunits[2])
         current = Contract.objects.create(
@@ -799,8 +800,7 @@ class AlumbrisFormerTenantDocumentMetadataTest(GenoAdminTestCase):
     def test_inactive_contract_hides_historical_document(self):
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 200)
         contract = self.old_doc.content_object
-        contract.active = False
-        contract.save(update_fields=["active"])
+        Contract.objects.filter(pk=contract.pk).update(active=False)
         self.assertEqual(self.call(self.former, self.old_doc.id).status_code, 404)
 
     def test_revocation_immediately_removes_historical_document(self):
